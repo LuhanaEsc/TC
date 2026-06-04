@@ -21,15 +21,21 @@ def validar_semantica(nombre, apellido, dni, edad, diagnostico):
 
     if len(nombre.strip()) == 0:
         errores.append("Nombre vacío")
+    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', nombre.strip()):  # devuelve True si NO hay coincidencia
+        errores.append("El nombre solo puede contener letras")
     
     if len(apellido.strip()) == 0:
         errores.append("Apellido vacío")
-    
+    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', apellido.strip()):
+        errores.append("El apellido solo puede contener letras")
+
     if len(dni.strip()) == 0:
         errores.append("DNI vacío")
     else:
         if len(dni.strip()) != 8:
             errores.append("El DNI debe tener 8 caracteres")
+        elif not dni.strip().isdigit():
+            errores.append("El DNI solo puede contener números")
 
     if len(diagnostico.strip()) < 3:
         errores.append("Diagnóstico inválido")
