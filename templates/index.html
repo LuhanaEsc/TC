@@ -32,6 +32,15 @@
             name="nombre"
             required>
         <br><br>
+
+        <label>Apellido:</label>
+        <br>
+        <input
+            type="text"
+            name="apellido"
+            required>
+        <br><br>
+
         <label>Edad:</label>
         <br>
         <input
@@ -39,6 +48,15 @@
             name="edad"
             required>
         <br><br>
+
+        <label>DNI:</label>
+        <br>
+        <input
+            type="text"
+            name="dni"
+            required>
+        <br><br>
+
         <label>Diagnóstico:</label>
         <br>
         <input
@@ -46,9 +64,11 @@
             name="diagnostico"
             required>
         <br><br>
+
         <button type="submit">
             Validar
         </button>
+
     </form>
     {% if resultado %}
     <div class="resultado">

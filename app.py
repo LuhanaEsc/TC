@@ -2,12 +2,9 @@ from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
-# =====================
 # VALIDACIÓN SEMÁNTICA
-# =====================
 
-def validar_semantica(nombre, edad, diagnostico):
-
+def validar_semantica(nombre, apellido, dni, edad, diagnostico):
     errores = []
 
     try:
@@ -24,44 +21,50 @@ def validar_semantica(nombre, edad, diagnostico):
 
     if len(nombre.strip()) == 0:
         errores.append("Nombre vacío")
+    
+    if len(apellido.strip()) == 0:
+        errores.append("Apellido vacío")
+    
+    if len(dni.strip()) == 0:
+        errores.append("DNI vacío")
+    else:
+        if len(dni.strip()) != 8:
+            errores.append("El DNI debe tener 8 caracteres")
 
     if len(diagnostico.strip()) < 3:
         errores.append("Diagnóstico inválido")
 
     return errores
 
-
-# =====================
 # RUTA PRINCIPAL
-# =====================
-
 @app.route("/", methods=["GET", "POST"])
 def home():
-
     resultado = ""
 
     if request.method == "POST":
-
         nombre = request.form["nombre"]
+        apellido = request.form["apellido"]
+        dni = request.form["dni"]
         edad = request.form["edad"]
         diagnostico = request.form["diagnostico"]
 
         errores = validar_semantica(
             nombre,
+            apellido,
+            dni,
             edad,
             diagnostico
         )
 
         if errores:
-
             resultado = "<br>".join(errores)
-
         else:
-
             resultado = f"""
             Registro médico válido ✅
             <br><br>
-            Paciente: {nombre}
+            Paciente: {nombre} {apellido}
+            <br>
+            DNI: {dni}
             <br>
             Edad: {edad}
             <br>
@@ -72,7 +75,6 @@ def home():
         "index.html",
         resultado=resultado
     )
-
 
 if __name__ == "__main__":
     app.run(debug=True)
