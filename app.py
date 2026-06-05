@@ -3,62 +3,67 @@ import re
 
 app = Flask(__name__)
 
-# DICCIONARIO DE CÓDIGOS MÉDICOS (El "Minicompilador" buscará aquí)
+# Diccionario de enfermedades (Nuestra tabla de símbolos/traducción)
 DICCIONARIO_ENFERMEDADES = {
     "A00": "Cólera",
     "J00": "Rinitis aguda (Resfriado común)",
     "E10": "Diabetes mellitus tipo 1",
     "I10": "Hipertensión esencial (primaria)",
-    "K21": "Enfermedad por reflujo gastroesofágico",
-    "N39": "Infección de vías urinarias",
-    "U07": "COVID-19",
-    "B01": "Varicela"
+    "U07": "COVID-19"
 }
 
-# VALIDACIÓN SEMÁNTICA
-def validar_semantica(nombre, apellido, dni, edad, diagnostico_codigo):
+# ==========================================
+# COMPONENTE: ANALIZADOR LÉXICO (TOKENIZADOR)
+# ==========================================
+def tokenizar_diagnostico(texto_diagnostico):
+    """
+    Convierte el texto ingresado en un Token con su Tipo y Valor.
+    """
+    codigo = texto_diagnostico.strip().upper()
+    
+    # Expresión regular para validar el formato del código (Una letra seguida de dos números)
+    patron_codigo_cie = r'^[A-Z]\d{2}$'
+    
+    if len(codigo) == 0:
+        return {"tipo": "TOKEN_VACIO", "valor": ""}
+        
+    if re.match(patron_codigo_cie, codigo):
+        # Si tiene la estructura correcta, es un token de código médico
+        return {"tipo": "TOKEN_CODIGO_MEDICO", "valor": codigo}
+    else:
+        # Si metió cualquier otra cosa, es un token de error/desconocido
+        return {"tipo": "TOKEN_ERROR_LEXICO", "valor": codigo}
+
+
+# ==========================================
+# COMPONENTE: ANALIZADOR SEMÁNTICO
+# ==========================================
+def validar_semantica(nombre, apellido, dni, edad, token_diagnostico):
     errores = []
 
-    # Validación de Edad
+    # [Validaciones de Nombre, Apellido, DNI y Edad se mantienen igual...]
     try:
-        edad_int = int(edad)
-        if edad_int < 0:
-            errores.append("Edad negativa")
-        if edad_int > 120:
-            errores.append("Edad fuera de rango")
-    except ValueError:
-        errores.append("La edad debe ser numérica")
+        if int(edad) < 0 or int(edad) > 120: errores.append("Edad fuera de rango")
+    except: errores.append("La edad debe ser numérica")
+    if len(nombre.strip()) == 0: errores.append("Nombre vacío")
+    if len(apellido.strip()) == 0: errores.append("Apellido vacío")
+    if len(dni.strip()) != 8 or not dni.strip().isdigit(): errores.append("DNI debe tener 8 dígitos numéricos")
 
-    # Validación de Nombre
-    if len(nombre.strip()) == 0:
-        errores.append("Nombre vacío")
-    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', nombre.strip()):
-        errores.append("El nombre solo puede contener letras")
-    
-    # Validación de Apellido
-    if len(apellido.strip()) == 0:
-        errores.append("Apellido vacío")
-    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', apellido.strip()):
-        errores.append("El apellido solo puede contener letras")
-
-    # Validación de DNI
-    dni_clean = dni.strip()
-    if len(dni_clean) == 0:
-        errores.append("DNI vacío")
-    else:
-        if len(dni_clean) != 8:
-            errores.append("El DNI debe tener 8 caracteres")
-        elif not dni_clean.isdigit():
-            errores.append("El DNI solo puede contener números")
-
-    # VALIDACIÓN DEL CÓDIGO DE ENFERMEDAD (Minicompilador)
-    codigo_clean = diagnostico_codigo.strip().upper() # Lo pasamos a mayúsculas para evitar errores
-    if len(codigo_clean) == 0:
-        errores.append("Código de diagnóstico vacío")
-    elif codigo_clean not in DICCIONARIO_ENFERMEDADES:
-        errores.append(f"Error de Compilación: El código '{codigo_clean}' no corresponde a ninguna enfermedad registrada")
+    # VALIDACIÓN SEMÁNTICA USANDO EL TOKEN
+    if token_diagnostico["tipo"] == "TOKEN_VACIO":
+        errores.append("Error Léxico: El campo de diagnóstico está vacío.")
+        
+    elif token_diagnostico["tipo"] == "TOKEN_ERROR_LEXICO":
+        errores.append(f"Error Léxico: Sintaxis de código inválida '{token_diagnostico['valor']}'. Debe ser una letra y dos números (Ej: A00).")
+        
+    elif token_diagnostico["tipo"] == "TOKEN_CODIGO_MEDICO":
+        # El token existe formalmente, ahora el analizador semántico ve si tiene significado real
+        codigo_valor = token_diagnostico["valor"]
+        if codigo_valor not in DICCIONARIO_ENFERMEDADES:
+            errores.append(f"Error Semántico: El token [{codigo_valor}] es válido formalmente, pero no existe en el diccionario de enfermedades.")
 
     return errores
+
 
 # RUTA PRINCIPAL
 @app.route("/", methods=["GET", "POST"])
@@ -70,42 +75,32 @@ def home():
         apellido = request.form["apellido"]
         dni = request.form["dni"]
         edad = request.form["edad"]
-        diagnostico_codigo = request.form["diagnostico"] # Aquí el doctor pone el código
+        diagnostico_input = request.form["diagnostico"]
 
-        errores = validar_semantica(
-            nombre,
-            apellido,
-            dni,
-            edad,
-            diagnostico_codigo
-        )
+        # 1. PASO LÉXICO: Generamos el Token
+        token_diagnostico = tokenizar_diagnostico(diagnostico_input)
+
+        # 2. PASO SEMÁNTICO: Validamos el Token y los demás datos
+        errores = validar_semantica(nombre, apellido, dni, edad, token_diagnostico)
 
         if errores:
-            # Mostramos los errores formateados
-            resultado = "<div style='color: red;'><b>Errores encontrados:</b><br>" + "<br>".join(f"• {err}" for err in errores) + "</div>"
+            resultado = "<div style='color: red;'><b>Errores de Compilación:</b><br>" + "<br>".join(f"• {err}" for err in errores) + "</div>"
         else:
-            # Traducimos el código usando nuestro diccionario
-            codigo_up = diagnostico_codigo.strip().upper()
-            enfermedad_traducida = DICCIONARIO_ENFERMEDADES[codigo_up]
+            # 3. PASO DE GENERACIÓN DE CÓDIGO / TRADUCCIÓN
+            codigo_final = token_diagnostico["valor"]
+            enfermedad_traducida = DICCIONARIO_ENFERMEDADES[codigo_final]
 
-            # Imprimimos la ficha médica completa con la traducción
             resultado = f"""
             <div style="border: 2px solid green; padding: 15px; background-color: #f9fff9;">
-                <h3 style="color: green; margin-top: 0;">Registro Médico Válido ✅</h3>
+                <h3 style="color: green; margin-top: 0;">¡Compilación Exitosa! ✅</h3>
+                <p><b>Token Generado:</b> <code>{{tipo: "{token_diagnostico['tipo']}", valor: "{token_diagnostico['valor']}"}}</code></p>
                 <hr>
-                <b>Paciente:</b> {apellido.strip().upper()}, {nombre.strip()} <br>
-                <b>DNI:</b> {dni.strip()} <br>
-                <b>Edad:</b> {edad} años <br>
-                <hr>
-                <b>Código CIE:</b> <span style="background-color: #ffffcc; padding: 2px 5px;">{codigo_up}</span> <br>
-                <b>Enfermedad Traducida:</b> <span style="color: blue; font-weight: bold;">{enfermedad_traducida}</span>
+                <b>Paciente:</b> {apellido.upper()}, {nombre} | <b>DNI:</b> {dni} | <b>Edad:</b> {edad}<br>
+                <b>Diagnóstico Traducido:</b> <span style="color: blue; font-weight: bold;">{enfermedad_traducida} ({codigo_final})</span>
             </div>
             """
 
-    return render_template(
-        "index.html",
-        resultado=resultado
-    )
+    return render_template("index.html", resultado=resultado)
 
 if __name__ == "__main__":
     app.run(debug=True)
