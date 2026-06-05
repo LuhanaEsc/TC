@@ -3,43 +3,60 @@ import re
 
 app = Flask(__name__)
 
-# VALIDACIÓN SEMÁNTICA
+# DICCIONARIO DE CÓDIGOS MÉDICOS (El "Minicompilador" buscará aquí)
+DICCIONARIO_ENFERMEDADES = {
+    "A00": "Cólera",
+    "J00": "Rinitis aguda (Resfriado común)",
+    "E10": "Diabetes mellitus tipo 1",
+    "I10": "Hipertensión esencial (primaria)",
+    "K21": "Enfermedad por reflujo gastroesofágico",
+    "N39": "Infección de vías urinarias",
+    "U07": "COVID-19",
+    "B01": "Varicela"
+}
 
-def validar_semantica(nombre, apellido, dni, edad, diagnostico):
+# VALIDACIÓN SEMÁNTICA
+def validar_semantica(nombre, apellido, dni, edad, diagnostico_codigo):
     errores = []
 
+    # Validación de Edad
     try:
-        edad = int(edad)
-
-        if edad < 0:
+        edad_int = int(edad)
+        if edad_int < 0:
             errores.append("Edad negativa")
-
-        if edad > 120:
+        if edad_int > 120:
             errores.append("Edad fuera de rango")
-
-    except:
+    except ValueError:
         errores.append("La edad debe ser numérica")
 
+    # Validación de Nombre
     if len(nombre.strip()) == 0:
         errores.append("Nombre vacío")
-    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', nombre.strip()):  # devuelve True si NO hay coincidencia
+    elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', nombre.strip()):
         errores.append("El nombre solo puede contener letras")
     
+    # Validación de Apellido
     if len(apellido.strip()) == 0:
         errores.append("Apellido vacío")
     elif not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$', apellido.strip()):
         errores.append("El apellido solo puede contener letras")
 
-    if len(dni.strip()) == 0:
+    # Validación de DNI
+    dni_clean = dni.strip()
+    if len(dni_clean) == 0:
         errores.append("DNI vacío")
     else:
-        if len(dni.strip()) != 8:
+        if len(dni_clean) != 8:
             errores.append("El DNI debe tener 8 caracteres")
-        elif not dni.strip().isdigit():
+        elif not dni_clean.isdigit():
             errores.append("El DNI solo puede contener números")
 
-    if len(diagnostico.strip()) < 3:
-        errores.append("Diagnóstico inválido")
+    # VALIDACIÓN DEL CÓDIGO DE ENFERMEDAD (Minicompilador)
+    codigo_clean = diagnostico_codigo.strip().upper() # Lo pasamos a mayúsculas para evitar errores
+    if len(codigo_clean) == 0:
+        errores.append("Código de diagnóstico vacío")
+    elif codigo_clean not in DICCIONARIO_ENFERMEDADES:
+        errores.append(f"Error de Compilación: El código '{codigo_clean}' no corresponde a ninguna enfermedad registrada")
 
     return errores
 
@@ -53,29 +70,36 @@ def home():
         apellido = request.form["apellido"]
         dni = request.form["dni"]
         edad = request.form["edad"]
-        diagnostico = request.form["diagnostico"]
+        diagnostico_codigo = request.form["diagnostico"] # Aquí el doctor pone el código
 
         errores = validar_semantica(
             nombre,
             apellido,
             dni,
             edad,
-            diagnostico
+            diagnostico_codigo
         )
 
         if errores:
-            resultado = "<br>".join(errores)
+            # Mostramos los errores formateados
+            resultado = "<div style='color: red;'><b>Errores encontrados:</b><br>" + "<br>".join(f"• {err}" for err in errores) + "</div>"
         else:
+            # Traducimos el código usando nuestro diccionario
+            codigo_up = diagnostico_codigo.strip().upper()
+            enfermedad_traducida = DICCIONARIO_ENFERMEDADES[codigo_up]
+
+            # Imprimimos la ficha médica completa con la traducción
             resultado = f"""
-            Registro médico válido ✅
-            <br><br>
-            Paciente: {nombre} {apellido}
-            <br>
-            DNI: {dni}
-            <br>
-            Edad: {edad}
-            <br>
-            Diagnóstico: {diagnostico}
+            <div style="border: 2px solid green; padding: 15px; background-color: #f9fff9;">
+                <h3 style="color: green; margin-top: 0;">Registro Médico Válido ✅</h3>
+                <hr>
+                <b>Paciente:</b> {apellido.strip().upper()}, {nombre.strip()} <br>
+                <b>DNI:</b> {dni.strip()} <br>
+                <b>Edad:</b> {edad} años <br>
+                <hr>
+                <b>Código CIE:</b> <span style="background-color: #ffffcc; padding: 2px 5px;">{codigo_up}</span> <br>
+                <b>Enfermedad Traducida:</b> <span style="color: blue; font-weight: bold;">{enfermedad_traducida}</span>
+            </div>
             """
 
     return render_template(
