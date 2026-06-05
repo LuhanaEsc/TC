@@ -3,81 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <title>Minicompilador Médico</title>
+
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 40px; 
-            background-color: #f4f7f6; 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f4f7f6;
             color: #333;
         }
+
         h2 { color: #2c3e50; }
-        form { 
-            background: white; 
-            padding: 25px; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-            max-width: 450px; 
+
+        form {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
         }
+
         .campo { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
-        input[type="text"] { 
-            width: 100%; 
-            padding: 10px; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            box-sizing: border-box; 
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
         }
-        input[type="text"]:focus {
-            border-color: #3498db;
-            outline: none;
-        }
-        button { 
-            background-color: #27ae60; 
-            color: white; 
-            padding: 12px 20px; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-size: 16px; 
+
+        input {
             width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
         }
-        button:hover { background-color: #219653; }
-        .resultado-box { margin-top: 25px; max-width: 450px; font-size: 15px; line-height: 1.6; }
-        code { background-color: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #219150;
+        }
+
+        .resultado {
+            margin-top: 25px;
+            max-width: 500px;
+            padding: 15px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            line-height: 1.6;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .ok {
+            color: green;
+            font-weight: bold;
+        }
+
+        code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
     </style>
 </head>
+
 <body>
 
-    <h2>MiniCompilador: Diagnósticos Médicos</h2>
-    <p style="color: #7f8c8d; max-width: 450px;">
-        El sistema analizará léxicamente la entrada del diagnóstico para generar un <b>Token</b> y luego validará su semántica.
+    <h2>🧠 Minicompilador Médico</h2>
+
+    <p>
+        Este sistema simula un compilador con:
+        <b>análisis léxico, sintáctico y semántico</b>.
     </p>
-    
+
     <form method="POST">
+
         <div class="campo">
-            <label>Nombre del Paciente:</label>
-            <input type="text" name="nombre" placeholder="Ej: Juan" required>
+            <label>Nombre</label>
+            <input type="text" name="nombre" required>
         </div>
+
         <div class="campo">
-            <label>Apellido del Paciente:</label>
-            <input type="text" name="apellido" placeholder="Ej: Pérez" required>
+            <label>Apellido</label>
+            <input type="text" name="apellido" required>
         </div>
+
         <div class="campo">
-            <label>DNI (8 dígitos):</label>
-            <input type="text" name="dni" placeholder="Ej: 12345678" required>
+            <label>DNI</label>
+            <input type="text" name="dni" required>
         </div>
+
         <div class="campo">
-            <label>Edad:</label>
-            <input type="text" name="edad" placeholder="Ej: 45" required>
+            <label>Edad</label>
+            <input type="text" name="edad" required>
         </div>
+
         <div class="campo">
-            <label>Código de Diagnóstico (CIE):</label>
-            <input type="text" name="diagnostico" placeholder="Códigos válidos: A00, J00, E10, I10, U07" required>
+            <label>Código Diagnóstico</label>
+            <input type="text" name="diagnostico" placeholder="A00, I10, U07..." required>
         </div>
-        <button type="submit">Compilar e Imprimir</button>
+
+        <button type="submit">Compilar</button>
+
     </form>
 
-    <div class="resultado-box">
+    <div class="resultado">
         {{ resultado | safe }}
     </div>
 
