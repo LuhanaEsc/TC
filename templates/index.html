@@ -14,11 +14,13 @@
         }
         button{
             padding:10px;
+            cursor: pointer;
         }
         .resultado{
             margin-top:20px;
             border:1px solid gray;
             padding:15px;
+            max-width: 450px;
         }
     </style>
 </head>
@@ -57,19 +59,21 @@
             required>
         <br><br>
 
-        <label>Diagnóstico:</label>
+        <label>Código de Diagnóstico:</label>
         <br>
         <input
             type="text"
             name="diagnostico"
+            placeholder="Ej: A00, J00, E10, U07"
             required>
         <br><br>
 
         <button type="submit">
-            Validar
+            Validar y Traducir
         </button>
 
     </form>
+
     {% if resultado %}
     <div class="resultado">
         {{ resultado|safe }}
