@@ -19,7 +19,7 @@
             padding: 25px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            max-width: 500px;
+            min-width: 300px;
         }
 
         .campo { margin-bottom: 15px; }
@@ -54,7 +54,6 @@
 
         .resultado {
             margin-top: 25px;
-            max-width: 500px;
             padding: 15px;
             border-radius: 8px;
             background: white;
@@ -77,6 +76,29 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
+
+        .tabla-analisis {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .tabla-analisis th, .tabla-analisis td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .tabla-analisis th {
+            background: #f4f7f6;
+            color: #2c3e50;
+        }
+
+        .contenedor {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
     </style>
 </head>
 
@@ -85,45 +107,96 @@
     <h2>Minicompilador Médico</h2>
 
     <p>
-        Este programa es una aplicación web hecha con Flask (Python) que simula un <b>compilador de tres fases</b> 
-        aplicado al registro médico de pacientes: recibe un formulario con nombre, apellido, DNI, edad y un código 
-        de diagnóstico, luego lo procesa primero léxicamente (verificando que el código tenga el formato 
-        correcto), luego sintácticamente (comprobando que ningún campo esté vacío) y 
-        finalmente de forma semántica (validando la edad, el DNI y que el código 
-        exista en el diccionario interno del programa), mostrando al final un resumen exitoso del paciente 
-        con su diagnóstico decodificado, o una lista de errores de ser necesario.
+        Este programa es una aplicación web hecha con Flask (Python) que simula un <b>compilador de tres fases</b>
+        aplicado al registro médico de pacientes: recibe un formulario con nombre, apellido, DNI, edad y un código
+        de diagnóstico CIE-10, luego lo procesa primero léxicamente (verificando que el código tenga el formato
+        correcto, ej: <code>J00</code>), luego sintácticamente (comprobando que ningún campo esté vacío) y
+        finalmente de forma semántica (validando que la edad sea coherente, el DNI tenga 8 dígitos y el código
+        exista en su diccionario interno de enfermedades), mostrando al final un resumen exitoso del paciente
+        con su diagnóstico decodificado, o una lista de errores clasificados por tipo si algo falla.
     </p>
 
-    <form method="POST">
+    <div class="contenedor">
 
-        <div class="campo">
-            <label>Nombre</label>
-            <input type="text" name="nombre" required>
-        </div>
+        <form method="POST">
 
-        <div class="campo">
-            <label>Apellido</label>
-            <input type="text" name="apellido" required>
-        </div>
+            <div class="campo">
+                <label>Nombre</label>
+                <input type="text" name="nombre" required>
+            </div>
 
-        <div class="campo">
-            <label>DNI</label>
-            <input type="text" name="dni" required>
-        </div>
+            <div class="campo">
+                <label>Apellido</label>
+                <input type="text" name="apellido" required>
+            </div>
 
-        <div class="campo">
-            <label>Edad</label>
-            <input type="text" name="edad" required>
-        </div>
+            <div class="campo">
+                <label>DNI</label>
+                <input type="text" name="dni" required>
+            </div>
 
-        <div class="campo">
-            <label>Código Diagnóstico</label>
-            <input type="text" name="diagnostico" placeholder="A00, I10, U07..." required>
-        </div>
+            <div class="campo">
+                <label>Edad</label>
+                <input type="text" name="edad" required>
+            </div>
 
-        <button type="submit">Compilar</button>
+            <div class="campo">
+                <label>Código Diagnóstico</label>
+                <input type="text" name="diagnostico" placeholder="A00, I10, U07..." required>
+            </div>
 
-    </form>
+            <button type="submit">Compilar</button>
+
+        </form>
+
+        <table class="tabla-analisis">
+            <thead>
+                <tr>
+                    <th>Fase</th>
+                    <th>Elemento</th>
+                    <th>Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td rowspan="3"><b>Léxico</b></td>
+                    <td><code>TOKEN_CODIGO_MEDICO</code></td>
+                    <td><code>/^[A-Z]\d{2}$/</code> — ej: J00</td>
+                </tr>
+                <tr>
+                    <td><code>TOKEN_VACIO</code></td>
+                    <td><code>/^$/</code> — campo vacío</td>
+                </tr>
+                <tr>
+                    <td><code>TOKEN_ERROR_LEXICO</code></td>
+                    <td>Cualquier otro formato — ej: AB1C</td>
+                </tr>
+                <tr>
+                    <td rowspan="2"><b>Sintáctico</b></td>
+                    <td>Gramática</td>
+                    <td><code>PACIENTE → NOMBRE APELLIDO DNI EDAD DIAG</code></td>
+                </tr>
+                <tr>
+                    <td>Regla</td>
+                    <td>Todos los campos deben estar presentes</td>
+                </tr>
+                <tr>
+                    <td rowspan="3"><b>Semántico</b></td>
+                    <td>Edad</td>
+                    <td>Entero entre 0 y 120</td>
+                </tr>
+                <tr>
+                    <td>DNI</td>
+                    <td>Exactamente 8 dígitos numéricos</td>
+                </tr>
+                <tr>
+                    <td>Diagnóstico</td>
+                    <td>Código debe existir en el diccionario CIE-10</td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
 
     <div class="resultado">
         {{ resultado | safe }}
