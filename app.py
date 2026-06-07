@@ -26,13 +26,9 @@ def tokenizar_diagnostico(texto_diagnostico):
     else:
         return {"tipo": "TOKEN_ERROR_LEXICO", "valor": codigo}
 
-
 # SINTAXIS (NUEVO PARSER)
 def analizar_sintaxis(nombre, apellido, dni, edad, token_diagnostico):
     errores = []
-
-    # Regla de estructura general (GRAMÁTICA SIMPLE)
-    # PACIENTE → NOMBRE APELLIDO DNI EDAD DIAGNÓSTICO
 
     if len(nombre.strip()) == 0:
         errores.append("Error Sintáctico: Falta nombre")
@@ -54,6 +50,12 @@ def analizar_sintaxis(nombre, apellido, dni, edad, token_diagnostico):
 # SEMÁNTICA
 def validar_semantica(nombre, apellido, dni, edad, token_diagnostico):
     errores = []
+
+    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$', nombre.strip()):
+        errores.append("Error Semántico: El nombre solo debe contener letras")
+
+    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$', apellido.strip()):
+        errores.append("Error Semántico: El apellido solo debe contener letras")
 
     try:
         edad_num = int(edad)
@@ -84,7 +86,6 @@ def home():
     resultado = ""
 
     if request.method == "POST":
-
         nombre = request.form["nombre"]
         apellido = request.form["apellido"]
         dni = request.form["dni"]
