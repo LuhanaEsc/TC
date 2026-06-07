@@ -3,20 +3,16 @@ import re
 
 app = Flask(__name__)
 
-# ==========================
 # DICCIONARIO (SEMÁNTICA)
-# ==========================
 DICCIONARIO_ENFERMEDADES = {
     "A00": "Cólera",
     "J00": "Rinitis aguda (Resfriado común)",
-    "E10": "Diabetes mellitus tipo 1",
+    "E10": "Diabetes tipo 1",
     "I10": "Hipertensión esencial (primaria)",
     "U07": "COVID-19"
 }
 
-# ==========================
 # LÉXICO (TOKENIZADOR)
-# ==========================
 def tokenizar_diagnostico(texto_diagnostico):
 
     codigo = texto_diagnostico.strip().upper()
@@ -31,9 +27,7 @@ def tokenizar_diagnostico(texto_diagnostico):
         return {"tipo": "TOKEN_ERROR_LEXICO", "valor": codigo}
 
 
-# ==========================
 # SINTAXIS (NUEVO PARSER)
-# ==========================
 def analizar_sintaxis(nombre, apellido, dni, edad, token_diagnostico):
     errores = []
 
@@ -57,12 +51,8 @@ def analizar_sintaxis(nombre, apellido, dni, edad, token_diagnostico):
 
     return errores
 
-
-# ==========================
 # SEMÁNTICA
-# ==========================
 def validar_semantica(nombre, apellido, dni, edad, token_diagnostico):
-
     errores = []
 
     try:
@@ -88,13 +78,9 @@ def validar_semantica(nombre, apellido, dni, edad, token_diagnostico):
 
     return errores
 
-
-# ==========================
 # FLASK APP
-# ==========================
 @app.route("/", methods=["GET", "POST"])
 def home():
-
     resultado = ""
 
     if request.method == "POST":
@@ -132,7 +118,6 @@ def home():
             """
 
     return render_template("index.html", resultado=resultado)
-
 
 if __name__ == "__main__":
     app.run(debug=True)
