@@ -85,8 +85,13 @@
     <h2>Minicompilador Médico</h2>
 
     <p>
-        Este sistema simula un compilador con:
-        <b>análisis léxico, sintáctico y semántico</b>.
+        Este programa es una aplicación web hecha con Flask (Python) que simula un <b>compilador de tres fases</b> 
+        aplicado al registro médico de pacientes: recibe un formulario con nombre, apellido, DNI, edad y un código 
+        de diagnóstico, luego lo procesa primero léxicamente (verificando que el código tenga el formato 
+        correcto), luego sintácticamente (comprobando que ningún campo esté vacío) y 
+        finalmente de forma semántica (validando la edad, el DNI y que el código 
+        exista en el diccionario interno del programa), mostrando al final un resumen exitoso del paciente 
+        con su diagnóstico decodificado, o una lista de errores de ser necesario.
     </p>
 
     <form method="POST">
