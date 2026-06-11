@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Minicompilador Médico</title>
-
+    <title>Minicompilador Médico - Análisis por archivo</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -14,12 +13,26 @@
 
         h2 { color: #2c3e50; }
 
-        form {
+        p {
+            line-height: 1.5;
+        }
+
+        .contenedor {
+            display: flex;
+            gap: 24px;
+            align-items: stretch;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+        }
+
+        /* Columna izquierda: formulario + ejemplo */
+        .columna-izquierda {
+            flex: 1;
             background: white;
-            padding: 25px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            min-width: 300px;
+            padding: 20px;
+            min-width: 280px;
         }
 
         .campo { margin-bottom: 15px; }
@@ -30,12 +43,13 @@
             margin-bottom: 5px;
         }
 
-        input {
+        input[type="file"] {
             width: 100%;
             padding: 10px;
             border-radius: 5px;
             border: 1px solid #ccc;
             box-sizing: border-box;
+            background: white;
         }
 
         button {
@@ -47,41 +61,37 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            margin-top: 5px;
         }
 
         button:hover {
             background: #219150;
         }
 
-        .resultado {
+        .ejemplo-formato {
             margin-top: 25px;
-            padding: 15px;
-            border-radius: 8px;
-            background: white;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            line-height: 1.6;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
         }
 
-        .error {
-            color: red;
-            font-weight: bold;
+        .ejemplo-formato pre {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 13px;
+            margin: 10px 0 0 0;
         }
 
-        .ok {
-            color: green;
-            font-weight: bold;
-        }
-
-        code {
-            background: #eee;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
+        /* Tabla de análisis (columna derecha) */
         .tabla-analisis {
-            width: 100%;
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             border-collapse: collapse;
             font-size: 14px;
+            width: 100%;
         }
 
         .tabla-analisis th, .tabla-analisis td {
@@ -95,18 +105,41 @@
             color: #2c3e50;
         }
 
-        .contenedor {
-            display: flex;
-            gap: 24px;
-            align-items: flex-start;
+        /* Resultado */
+        .resultado {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            line-height: 1.6;
+        }
+
+        code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .error-general {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        ul {
+            margin-top: 5px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
-
 <body>
 
     <h2>Minicompilador Médico</h2>
 
+    <!-- Descripción original (larga) -->
     <p>
         Este programa es una aplicación web hecha con Flask (Python) que simula un <b>compilador de tres fases</b>
         aplicado al registro médico de pacientes: recibe un formulario con nombre, apellido, DNI, edad y un código
@@ -118,38 +151,37 @@
     </p>
 
     <div class="contenedor">
-
-        <form method="POST">
-
+        <!-- Columna izquierda: formulario + ejemplo -->
+        <div class="columna-izquierda">
             <div class="campo">
-                <label>Nombre</label>
-                <input type="text" name="nombre" required>
+                <label>📄 Seleccione archivo .txt con los datos del paciente</label>
+                <form method="POST" enctype="multipart/form-data" style="margin:0; padding:0; background:transparent; box-shadow:none;">
+                    <input type="file" name="archivo" accept=".txt" required>
+                    <button type="submit">🔍 Compilar desde archivo</button>
+                </form>
             </div>
 
-            <div class="campo">
-                <label>Apellido</label>
-                <input type="text" name="apellido" required>
+            <div class="ejemplo-formato">
+                <strong>📝 Formato esperado del archivo .txt:</strong>
+                <pre>
+Nombre: Juan
+Apellido: Pérez
+DNI: 12345678
+Edad: 30
+Diagnóstico: J00
+Fecha: 2025-06-10
+Hora: 09:15
+Hospital/Clínica: Clínica Santa María
+Laboratorio: Lab Central
+Salón: MI-P2-103
+Exámenes: Hemograma, Perfil lipídico
+Enfermera/Médico: Dra. Patricia López
+Tipo de sangre: A+</pre>
+                <small>Todos los campos son obligatorios.</small>
             </div>
+        </div>
 
-            <div class="campo">
-                <label>DNI</label>
-                <input type="text" name="dni" required>
-            </div>
-
-            <div class="campo">
-                <label>Edad</label>
-                <input type="text" name="edad" required>
-            </div>
-
-            <div class="campo">
-                <label>Código Diagnóstico</label>
-                <input type="text" name="diagnostico" placeholder="A00, I10, U07..." required>
-            </div>
-
-            <button type="submit">Compilar</button>
-
-        </form>
-
+        <!-- Columna derecha: tabla explicativa de las fases -->
         <table class="tabla-analisis">
             <thead>
                 <tr>
@@ -175,14 +207,14 @@
                 <tr>
                     <td rowspan="2"><b>Sintáctico</b></td>
                     <td>Gramática</td>
-                    <td><code>PACIENTE → NOMBRE APELLIDO DNI EDAD DIAG</code></td>
+                    <td><code>PACIENTE → CAMPOS (nombre, apellido, dni, edad, diagnostico, fecha, hora, hospital, laboratorio, salon, examenes, enfermera, tipo_sangre)</code></td>
                 </tr>
                 <tr>
                     <td>Regla</td>
                     <td>Todos los campos deben estar presentes</td>
                 </tr>
                 <tr>
-                    <td rowspan="3"><b>Semántico</b></td>
+                    <td rowspan="4"><b>Semántico</b></td>
                     <td>Edad</td>
                     <td>Entero entre 0 y 120</td>
                 </tr>
@@ -194,13 +226,59 @@
                     <td>Diagnóstico</td>
                     <td>Código debe existir en el diccionario CIE-10</td>
                 </tr>
+                <tr>
+                    <td>Salón</td>
+                    <td>Formato <code>ESPECIALIDAD-P[PISO]-[NUMERO]</code> con especialidad en {MI, CIR, PED, GO}, piso 1-10, número 1-999</td>
+                </tr>
+                <tr>
+                    <td colspan="3"><i>Además: fecha válida (YYYY-MM-DD), hora válida (HH:MM), tipo de sangre (A+, A-, B+, B-, AB+, AB-, O+, O-), etc.</i></td>
+                </tr>
             </tbody>
         </table>
-
     </div>
 
     <div class="resultado">
-        {{ resultado | safe }}
+        {% if mensaje_error_general %}
+            <div class="error-general">
+                <strong>⚠️ Error:</strong> {{ mensaje_error_general }}
+            </div>
+        {% endif %}
+
+        {% if resultado %}
+            {% if resultado.exito %}
+                <h3 style="color:green;">✔ Compilación exitosa</h3>
+                <p>
+                    <strong>Paciente:</strong> {{ resultado.nombre }} {{ resultado.apellido }}<br>
+                    <strong>DNI:</strong> {{ resultado.dni }}<br>
+                    <strong>Edad:</strong> {{ resultado.edad }}<br>
+                    <strong>Diagnóstico:</strong> {{ resultado.diagnostico_nombre }} ({{ resultado.codigo }})<br>
+                    <strong>Fecha:</strong> {{ resultado.fecha }}<br>
+                    <strong>Hora:</strong> {{ resultado.hora }}<br>
+                    <strong>Hospital/Clínica:</strong> {{ resultado.hospital_clinica }}<br>
+                    <strong>Laboratorio:</strong> {{ resultado.laboratorio }}<br>
+                    <strong>Salón:</strong> {{ resultado.salon }}<br>
+                    <strong>Exámenes:</strong> {{ resultado.examenes }}<br>
+                    <strong>Enfermera/Médico:</strong> {{ resultado.enfermera_medico }}<br>
+                    <strong>Tipo de sangre:</strong> {{ resultado.tipo_sangre }}
+                </p>
+                <br>
+                <b>Token generado para diagnóstico:</b> {{ resultado.token }}
+            {% else %}
+                <h3 style="color:#c0392b;">✘ Errores encontrados</h3>
+                {% if resultado.errores["LÉXICO"] %}
+                    <b>🔤 Errores léxicos:</b>
+                    <ul>{% for e in resultado.errores["LÉXICO"] %}<li>{{ e }}</li>{% endfor %}</ul>
+                {% endif %}
+                {% if resultado.errores["SINTÁCTICO"] %}
+                    <b>🏗️ Errores sintácticos:</b>
+                    <ul>{% for e in resultado.errores["SINTÁCTICO"] %}<li>{{ e }}</li>{% endfor %}</ul>
+                {% endif %}
+                {% if resultado.errores["SEMÁNTICO"] %}
+                    <b>📖 Errores semánticos:</b>
+                    <ul>{% for e in resultado.errores["SEMÁNTICO"] %}<li>{{ e }}</li>{% endfor %}</ul>
+                {% endif %}
+            {% endif %}
+        {% endif %}
     </div>
 
 </body>
