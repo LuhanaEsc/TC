@@ -2,7 +2,7 @@ from flask import Flask, render_template, request
 import re
 import os
 from datetime import datetime
-from werkzeug.utils import secure_filename
+from unicodedata import normalize
 
 app = Flask(__name__)
 
@@ -23,11 +23,7 @@ DICCIONARIO_ENFERMEDADES = {
     "U07": "COVID-19"
 }
 
-# Tipos de sangre válidos
 TIPOS_SANGRE_VALIDOS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
-
-# Especialidades válidas para el salón
-ESPECIALIDADES_VALIDAS = {"MI", "CIR", "PED", "GO"}
 
 # ========== LÉXICO ==========
 def tokenizar_diagnostico(texto_diagnostico):
@@ -68,8 +64,11 @@ def validar_semantica(datos, token_diagnostico):
     examenes = datos['examenes']
     enfermera = datos['enfermera_medico']
     tipo_sangre = datos['tipo_sangre'].upper()
+    # Corregir posible '0+' a 'O+'
+    if tipo_sangre == '0+':
+        tipo_sangre = 'O+'
+        datos['tipo_sangre'] = 'O+'
 
-    # Validaciones de los campos originales
     if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$', nombre.strip()):
         errores.append(("SEMÁNTICO", "El nombre solo debe contener letras"))
     if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$', apellido.strip()):
@@ -83,102 +82,112 @@ def validar_semantica(datos, token_diagnostico):
     if len(dni.strip()) != 8 or not dni.isdigit():
         errores.append(("SEMÁNTICO", "El DNI debe tener exactamente 8 dígitos numéricos"))
 
-    # Diagnóstico
     if token_diagnostico["tipo"] == "TOKEN_ERROR_LEXICO":
         errores.append(("LÉXICO", f"Código inválido: {token_diagnostico['valor']}"))
     elif token_diagnostico["tipo"] == "TOKEN_CODIGO_MEDICO":
         if token_diagnostico["valor"] not in DICCIONARIO_ENFERMEDADES:
             errores.append(("SEMÁNTICO", f"Código {token_diagnostico['valor']} no existe en el diccionario"))
 
-    # Fecha (formato YYYY-MM-DD)
+    # Fecha
     try:
         datetime.strptime(fecha, "%Y-%m-%d")
     except ValueError:
         errores.append(("SEMÁNTICO", "Fecha inválida. Use el formato YYYY-MM-DD (ej: 2025-03-15)"))
-
-    # Hora (formato HH:MM)
+    # Hora
     if not re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', hora):
         errores.append(("SEMÁNTICO", "Hora inválida. Use formato HH:MM (24h, ej: 14:30)"))
-
-    # Hospital/Clínica (letras, espacios, puntos, guiones)
+    # Hospital
     if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.\-]+$', hospital):
         errores.append(("SEMÁNTICO", "Hospital/Clínica solo puede contener letras, espacios, puntos y guiones"))
-
-    # Laboratorio (alfanumérico y espacios, guiones bajos)
+    # Laboratorio
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', laboratorio):
         errores.append(("SEMÁNTICO", "Laboratorio solo puede contener letras, números, espacios, guiones y guiones bajos"))
-
-    # Salón: formato ESPECIALIDAD-P[0-9]+-[0-9]+  ej: MI-P2-103
+    # Salón
     patron_salon = r'^(MI|CIR|PED|GO)-P(\d+)-(\d+)$'
     match_salon = re.match(patron_salon, salon.strip().upper())
     if not match_salon:
         errores.append(("SEMÁNTICO", "Salón inválido. Formato esperado: ESPECIALIDAD-P[PISO]-[NÚMERO], ej: MI-P2-103. Especialidades: MI, CIR, PED, GO"))
     else:
-        especialidad = match_salon.group(1)
         piso = int(match_salon.group(2))
         numero = int(match_salon.group(3))
-        # Validaciones adicionales (opcional: rango de piso, etc.)
         if piso < 1 or piso > 10:
             errores.append(("SEMÁNTICO", "El piso debe estar entre 1 y 10"))
         if numero < 1 or numero > 999:
             errores.append(("SEMÁNTICO", "El número de salón debe estar entre 1 y 999"))
-
-    # Exámenes (texto libre, no obligamos formato específico pero no vacío)
+    # Exámenes
     if len(examenes.strip()) == 0:
         errores.append(("SEMÁNTICO", "El campo exámenes no puede estar vacío"))
-
-    # Enfermera/Médico (letras, espacios, puntos, títulos como Dr., Dra.)
+    # Enfermera/Médico
     if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]+$', enfermera):
         errores.append(("SEMÁNTICO", "Enfermera/Médico solo puede contener letras, espacios y puntos"))
-
     # Tipo de sangre
     if tipo_sangre not in TIPOS_SANGRE_VALIDOS:
         errores.append(("SEMÁNTICO", f"Tipo de sangre inválido. Válidos: {', '.join(TIPOS_SANGRE_VALIDOS)}"))
 
     return errores
 
+# ========== FUNCIÓN PARA NORMALIZAR NOMBRES DE CAMPOS ==========
+def normalizar_nombre_campo(nombre):
+    # Eliminar tildes (ñ se conserva)
+    nombre = normalize('NFKD', nombre).encode('ASCII', 'ignore').decode('ASCII')
+    # Convertir a minúsculas
+    nombre = nombre.lower()
+    # Reemplazar espacios, barras y guiones por guión bajo
+    nombre = re.sub(r'[ /-]+', '_', nombre)
+    # Eliminar caracteres no alfanuméricos ni guión bajo
+    nombre = re.sub(r'[^a-z0-9_]', '', nombre)
+    return nombre
+
 # ========== PARSEO DEL ARCHIVO TXT ==========
 def parsear_archivo_txt(contenido):
-    # Mapeo de posibles nombres de campo a clave interna
-    mapeo_campos = {
-        'nombre': ['nombre'],
-        'apellido': ['apellido'],
-        'dni': ['dni'],
-        'edad': ['edad'],
-        'diagnostico': ['diagnostico', 'código diagnóstico', 'codigo'],
-        'fecha': ['fecha'],
-        'hora': ['hora'],
-        'hospital_clinica': ['hospital/clínica', 'hospital', 'clinica', 'clínica', 'hospital_clinica'],
-        'laboratorio': ['laboratorio'],
-        'salon': ['salón', 'salon', 'sala'],
-        'examenes': ['exámenes', 'examenes', 'pruebas'],
-        'enfermera_medico': ['enfermera/médico', 'enfermera', 'medico', 'médico', 'enfermera_medico'],
-        'tipo_sangre': ['tipo de sangre', 'tipo sangre', 'rh', 'tipo_sangre']
+    # Mapeo de nombres normalizados a claves internas
+    mapeo_normalizado = {
+        'nombre': 'nombre',
+        'apellido': 'apellido',
+        'dni': 'dni',
+        'edad': 'edad',
+        'diagnostico': 'diagnostico',
+        'codigo_diagnostico': 'diagnostico',
+        'fecha': 'fecha',
+        'hora': 'hora',
+        'hospital_clinica': 'hospital_clinica',
+        'hospital': 'hospital_clinica',
+        'clinica': 'hospital_clinica',
+        'laboratorio': 'laboratorio',
+        'salon': 'salon',
+        'sala': 'salon',
+        'examenes': 'examenes',
+        'pruebas': 'examenes',
+        'enfermera_medico': 'enfermera_medico',
+        'enfermera': 'enfermera_medico',
+        'medico': 'enfermera_medico',
+        'tipo_sangre': 'tipo_sangre',
+        'rh': 'tipo_sangre'
     }
-    # Invertir para buscar por sinónimos
-    sinonimos = {}
-    for clave, lista in mapeo_campos.items():
-        for sin in lista:
-            sinonimos[sin.lower()] = clave
-
+    
     datos = {}
     lineas = contenido.splitlines()
     patron_campo = re.compile(r'^\s*([^:]+?)\s*:\s*(.*)$')
+    
     for linea in lineas:
         if linea.strip() == "":
             continue
         match = patron_campo.match(linea)
         if not match:
             raise ValueError(f"Línea con formato incorrecto: {linea}")
-        nombre_campo_raw = match.group(1).strip().lower()
+        nombre_campo_raw = match.group(1).strip()
         valor = match.group(2).strip()
+        # Normalizar el nombre del campo
+        clave_normalizada = normalizar_nombre_campo(nombre_campo_raw)
         # Buscar la clave interna
-        clave_interna = sinonimos.get(nombre_campo_raw)
+        clave_interna = mapeo_normalizado.get(clave_normalizada)
         if clave_interna:
             datos[clave_interna] = valor
         # Si no se reconoce, se ignora (podría agregarse advertencia)
+    
     # Verificar que todos los campos requeridos estén
-    required = set(mapeo_campos.keys())
+    required = {'nombre', 'apellido', 'dni', 'edad', 'diagnostico', 'fecha', 'hora',
+                'hospital_clinica', 'laboratorio', 'salon', 'examenes', 'enfermera_medico', 'tipo_sangre'}
     if not required.issubset(datos.keys()):
         faltantes = required - set(datos.keys())
         raise ValueError(f"Faltan los campos en el archivo: {', '.join(faltantes)}")
@@ -205,7 +214,6 @@ def home():
                     contenido = archivo.read().decode('utf-8')
                     datos = parsear_archivo_txt(contenido)
 
-                    # Extraer campos
                     nombre = datos['nombre']
                     apellido = datos['apellido']
                     dni = datos['dni']
@@ -218,18 +226,17 @@ def home():
                     salon = datos['salon']
                     examenes = datos['examenes']
                     enfermera_medico = datos['enfermera_medico']
-                    tipo_sangre = datos['tipo_sangre'].upper()
+                    tipo_sangre = datos['tipo_sangre']
 
-                    # 1. Léxico
+                    # Corregir tipo de sangre '0+' a 'O+'
+                    if tipo_sangre.upper() == '0+':
+                        tipo_sangre = 'O+'
+                        datos['tipo_sangre'] = 'O+'
+
                     token_diagnostico = tokenizar_diagnostico(diagnostico_input)
-
-                    # 2. Sintaxis
                     errores_sintaxis = analizar_sintaxis(datos)
-
-                    # 3. Semántica
                     errores_semantica = validar_semantica(datos, token_diagnostico)
 
-                    # Consolidar errores
                     for fase, msg in errores_sintaxis:
                         errores_por_fase[fase].append(msg)
                     for fase, msg in errores_semantica:
@@ -256,7 +263,7 @@ def home():
                             "salon": salon.upper(),
                             "examenes": examenes,
                             "enfermera_medico": enfermera_medico,
-                            "tipo_sangre": tipo_sangre
+                            "tipo_sangre": tipo_sangre.upper()
                         }
                     else:
                         resultado = {
