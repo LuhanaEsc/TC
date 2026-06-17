@@ -24,6 +24,29 @@ DICCIONARIO_ENFERMEDADES = {
 TIPOS_SANGRE_VALIDOS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
 
 # ---------- GENERACION DE DOT PARA AFDs ----------
+def generar_dot_error(tipo_esperado, valor):
+    """Genera un AFD/AFN que muestra el rechazo del valor inválido."""
+    valor_corto = valor[:10] + "..." if len(valor) > 10 else valor
+    dfa = f"""digraph AFD_ERROR {{
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0"];
+    qerr [label="ERROR" shape=doublecircle fillcolor=salmon fontcolor=black];
+    q0 -> qerr [label="{valor_corto}" color=red fontcolor=red];
+    label="Esperado: {tipo_esperado}";
+    fontcolor=red;
+}}"""
+    nfa = f"""digraph AFN_ERROR {{
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0"];
+    qerr [label="ERROR" shape=doublecircle fillcolor=salmon fontcolor=black];
+    q0 -> qerr [label="{valor_corto}" style=dashed color=red fontcolor=red];
+    label="Esperado: {tipo_esperado}";
+    fontcolor=red;
+}}"""
+    return dfa, nfa
+
 def generar_dot_afd(tipo_token, version="DFA"):
     afds = {
         "CODIGO_MEDICO": {
@@ -284,10 +307,10 @@ def tokenizar_valor(campo, valor):
         dot_dfa = generar_dot_afd(tipo_token, "DFA")
         dot_nfa = generar_dot_afd(tipo_token, "NFA")
     else:
+        tipo_esperado = tipo_token  # guarda qué se esperaba antes de pisar
         tipo_token = "ERROR_LEXICO"
         estados = ["q0", "q_error (rechazo)"]
-        dot_dfa = ""
-        dot_nfa = ""
+        dot_dfa, dot_nfa = generar_dot_error(tipo_esperado, valor.strip())
 
     tokens.append({
         "tipo": tipo_token,
@@ -501,6 +524,15 @@ def home():
                     errores_semantica = validar_semantica(datos, token_diag)
 
                     errores_por_fase = {"LEXICO": [], "SINTACTICO": [], "SEMANTICO": []}
+
+                    # Recolectar errores lexicos desde los tokens
+                    for campo, lista_tokens in tokens_por_campo.items():
+                        for tk in lista_tokens:
+                            if tk["tipo"] == "ERROR_LEXICO":
+                                errores_por_fase["LEXICO"].append(
+                                    f"Campo '{campo}': valor '{tk["valor"]}' contiene caracteres invalidos"
+                                )
+
                     for fase, msg in errores_sintaxis:
                         errores_por_fase[fase].append(msg)
                     for fase, msg in errores_semantica:
