@@ -242,6 +242,77 @@ def generar_dot_afd(tipo_token, version="DFA"):
     q0 -> q0 [label="[A-Za-z/]"];
     q0 -> q0 [label="eps" style=dashed];
 }"""
+        },
+        "SALON": {
+            "DFA": """digraph AFD_SALON {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0"];
+    q1 [label="q1"];
+    q2 [label="q2"];
+    q3 [label="q3"];
+    q4 [label="q4"];
+    q5 [label="q5"];
+    q6 [label="q6" shape=doublecircle fillcolor=lightgreen];
+    q0 -> q1 [label="MI|CIR|PED|GO"];
+    q1 -> q2 [label="-"];
+    q2 -> q3 [label="P"];
+    q3 -> q4 [label="[0-9]"];
+    q4 -> q4 [label="[0-9]"];
+    q4 -> q5 [label="-"];
+    q5 -> q6 [label="[0-9]"];
+    q6 -> q6 [label="[0-9]"];
+}""",
+            "NFA": """digraph AFN_SALON {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0"];
+    q1 [label="q1"];
+    q2 [label="q2"];
+    q3 [label="q3"];
+    q4 [label="q4"];
+    q5 [label="q5"];
+    q6 [label="q6" shape=doublecircle fillcolor=lightyellow];
+    q0 -> q1 [label="MI|CIR|PED|GO"];
+    q1 -> q2 [label="-"];
+    q2 -> q3 [label="P"];
+    q3 -> q4 [label="[0-9]"];
+    q4 -> q4 [label="[0-9]"];
+    q4 -> q5 [label="-"];
+    q5 -> q6 [label="[0-9]"];
+    q6 -> q6 [label="[0-9]"];
+    q4 -> q5 [label="eps" style=dashed];
+}"""
+        },
+        "EXAMENES": {
+            "DFA": """digraph AFD_EXAMENES {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0" shape=doublecircle fillcolor=lightgreen];
+    q0 -> q0 [label="[A-Za-z0-9 .,\\\\-]"];
+}""",
+            "NFA": """digraph AFN_EXAMENES {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0" shape=doublecircle fillcolor=lightyellow];
+    q0 -> q0 [label="[A-Za-z0-9 .,\\\\-]"];
+    q0 -> q0 [label="eps" style=dashed];
+}"""
+        },
+        "LABORATORIO": {
+            "DFA": """digraph AFD_LABORATORIO {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0" shape=doublecircle fillcolor=lightgreen];
+    q0 -> q0 [label="[A-Za-z0-9 \\\\-_]"];
+}""",
+            "NFA": """digraph AFN_LABORATORIO {
+    rankdir=LR;
+    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
+    q0 [label="q0" shape=doublecircle fillcolor=lightyellow];
+    q0 -> q0 [label="[A-Za-z0-9 \\\\-_]"];
+    q0 -> q0 [label="eps" style=dashed];
+}"""
         }
     }
     if tipo_token not in afds:
@@ -250,7 +321,8 @@ def generar_dot_afd(tipo_token, version="DFA"):
 
 # ---------- SIMULACION DE AFD PARA OBTENER ESTADOS ----------
 def simular_afd(tipo_token, cadena):
-    if tipo_token in ["CODIGO_MEDICO", "FECHA", "HORA", "NUMERO", "TIPO_SANGRE", "CADENA", "ID_CAMPO"]:
+    if tipo_token in ["CODIGO_MEDICO", "FECHA", "HORA", "NUMERO", "TIPO_SANGRE",
+                      "CADENA", "ID_CAMPO", "SALON", "EXAMENES", "LABORATORIO"]:
         estados = ["q0"]
         for i in range(len(cadena)):
             estados.append(f"q{i+1}")
@@ -287,6 +359,12 @@ def tokenizar_valor(campo, valor):
         tipo_token = "NUMERO"
     elif campo.lower() in ["tipo_sangre"]:
         tipo_token = "TIPO_SANGRE"
+    elif campo.lower() in ["salon"]:
+        tipo_token = "SALON"
+    elif campo.lower() in ["examenes"]:
+        tipo_token = "EXAMENES"
+    elif campo.lower() in ["laboratorio"]:
+        tipo_token = "LABORATORIO"
 
     valido = False
     if tipo_token == "CODIGO_MEDICO":
@@ -299,6 +377,11 @@ def tokenizar_valor(campo, valor):
         valido = bool(re.fullmatch(r'^\d+$', valor.strip()))
     elif tipo_token == "TIPO_SANGRE":
         valido = bool(re.fullmatch(r'^(A|B|AB|O)[+-]$', valor.strip().upper()))
+    elif tipo_token == "SALON":
+        valido = bool(re.fullmatch(r'^(MI|CIR|PED|GO)-P\d+-\d+$', valor.strip().upper()))
+    elif tipo_token in ["EXAMENES", "LABORATORIO"]:
+        # Acepta letras, números, espacios, comas, puntos, guiones
+        valido = bool(re.fullmatch(r'^[A-Za-záéíóúÁÉÍÓÚüÜñÑ0-9\s\.\,\-_]+$', valor.strip()))
     else:
         valido = bool(re.fullmatch(r'^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\,\-]+$', valor.strip()))
 
