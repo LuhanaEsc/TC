@@ -193,8 +193,8 @@ def tokenizar_valor(campo, valor):
         "semantico_valido": sem_valido
     }
 
-    if not lex_valido and regex:
-        token_data["error_mensaje"] = f"No cumple regex: {regex}"
+    if not lex_valido and expresion_regular:
+        token_data["error_mensaje"] = f"No cumple expresión regular: {expresion_regular}"
     elif not sem_valido:
         token_data["error_mensaje"] = sem_error
 
