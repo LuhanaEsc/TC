@@ -360,7 +360,7 @@ Tipo de sangre: A+
                 <tr>
                     <th>Token</th>
                     <th>Valor</th>
-                    <th>Regex</th>
+                    <th>Expresión regular</th>
                     <th>Estado</th>
                 </tr>
             </thead>
@@ -369,7 +369,7 @@ Tipo de sangre: A+
                 <tr>
                     <td class="token-name">{{ tu.tipo }}</td>
                     <td>{{ tu.valor }}</td>
-                    <td><span class="regex-celda">{{ tu.regex }}</span></td>
+                    <td><span class="regex-celda">{{ tu.expresion_regular }}</span></td>
                     <td>{{ tu.estado if tu.estado is defined else 'OK' }}</td>
                 </tr>
                 {% endfor %}
@@ -393,9 +393,9 @@ Tipo de sangre: A+
             <b>Token:</b> <span class="tag">{{ t.tipo }}</span><br>
             <b>Valor:</b> {{ t.valor }}<br>
 
-            {% if t.regex %}
+            {% if t.expresion_regular %}
             <div class="regex-box">
-                Regex: {{ t.regex }}
+                Expresión regular: {{ t.expresion_regular }}
             </div>
             {% endif %}
 
@@ -455,7 +455,7 @@ Tipo de sangre: A+
                 <td class="token-name">{{ t.token }}</td>
                 <td>{{ t.descripcion }}</td>
                 <td class="ejemplo-celda">{{ t.ejemplo }}</td>
-                <td><span class="regex-celda">{{ t.regex }}</span></td>
+                <td><span class="regex-celda">{{ t.expresion_regular }}</span></td>
             </tr>
             {% endfor %}
         </tbody>
