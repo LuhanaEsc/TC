@@ -2,658 +2,471 @@ import os
 import re
 from flask import Flask, render_template, request
 from datetime import datetime
-from unicodedata import normalize
+from unicodedata import normalize, combining
 
 app = Flask(__name__)
+
 UPLOAD_FOLDER = '/tmp'
 ALLOWED_EXTENSIONS = {'txt'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Diccionario CIE-10
+# =========================
+# CIE-10
+# =========================
 DICCIONARIO_ENFERMEDADES = {
-    "A00": "Colera", "A01": "Fiebre tifoidea", "A02": "Otras salmonelosis",
-    "B20": "Enfermedad por VIH", "J00": "Rinitis aguda", "J01": "Sinusitis aguda",
+    "A00": "Colera", "A01": "Fiebre tifoidea", "A02": "Salmonelosis",
+    "B20": "VIH", "J00": "Rinitis aguda", "J01": "Sinusitis",
     "E10": "Diabetes tipo 1", "E11": "Diabetes tipo 2",
-    "I10": "Hipertension esencial", "I11": "Cardiopatia hipertensiva",
-    "U07": "COVID-19", "Z00": "Examen general"
+    "I10": "Hipertension", "U07": "COVID-19"
 }
 
 TIPOS_SANGRE_VALIDOS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
+SALAS_VALIDAS = {
+    "MI-P1-101",
+    "CIR-P2-210",
+    "PED-P3-305",
+    "GO-P1-103",
+    "MI-P2-103"
+}
 
-# ---------- GENERACION DE DOT PARA AFDs ----------
-def generar_dot_error(tipo_esperado, valor):
-    """Genera un AFD/AFN que muestra el rechazo del valor inválido."""
-    valor_corto = valor[:10] + "..." if len(valor) > 10 else valor
-    dfa = f"""digraph AFD_ERROR {{
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    qerr [label="ERROR" shape=doublecircle fillcolor=salmon fontcolor=black];
-    q0 -> qerr [label="{valor_corto}" color=red fontcolor=red];
-    label="Esperado: {tipo_esperado}";
-    fontcolor=red;
-}}"""
-    nfa = f"""digraph AFN_ERROR {{
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    qerr [label="ERROR" shape=doublecircle fillcolor=salmon fontcolor=black];
-    q0 -> qerr [label="{valor_corto}" style=dashed color=red fontcolor=red];
-    label="Esperado: {tipo_esperado}";
-    fontcolor=red;
-}}"""
-    return dfa, nfa
 
-def generar_dot_afd(tipo_token, version="DFA"):
-    afds = {
-        "CODIGO_MEDICO": {
-            "DFA": """digraph AFD_CODIGO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3" shape=doublecircle fillcolor=lightgreen style=filled];
-    qerr [label="error" fillcolor=salmon style=filled fontcolor=black];
-    q0 -> q1 [label="[A-Z]"];
-    q0 -> qerr [label="otro"];
-    q1 -> q2 [label="[0-9]"];
-    q1 -> qerr [label="otro"];
-    q2 -> q3 [label="[0-9]"];
-    q2 -> qerr [label="otro"];
-    q3 -> qerr [label="cualquier"];
-}""",
-            "NFA": """digraph AFN_CODIGO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q1 [label="[A-Z]"];
-    q1 -> q2 [label="[0-9]"];
-    q1 -> q2 [label="eps"];
-    q2 -> q3 [label="[0-9]"];
-    q2 -> q3 [label="eps"];
-}"""
-        },
-        "FECHA": {
-            "DFA": """digraph AFD_FECHA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5"];
-    q6 [label="q6"];
-    q7 [label="q7"];
-    q8 [label="q8"];
-    q9 [label="q9" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q1 [label="[0-9]"];
-    q1 -> q2 [label="[0-9]"];
-    q2 -> q3 [label="[0-9]"];
-    q3 -> q4 [label="[0-9]"];
-    q4 -> q5 [label="-"];
-    q5 -> q6 [label="[0-9]"];
-    q6 -> q7 [label="[0-9]"];
-    q7 -> q8 [label="-"];
-    q8 -> q9 [label="[0-9]"];
-}""",
-            "NFA": """digraph AFN_FECHA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5"];
-    q6 [label="q6"];
-    q7 [label="q7"];
-    q8 [label="q8"];
-    q9 [label="q9" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q1 [label="[0-9]"];
-    q1 -> q2 [label="[0-9]"];
-    q2 -> q3 [label="[0-9]"];
-    q3 -> q4 [label="[0-9]"];
-    q4 -> q5 [label="-"];
-    q5 -> q6 [label="[0-9]"];
-    q6 -> q7 [label="[0-9]"];
-    q7 -> q8 [label="-"];
-    q8 -> q9 [label="[0-9]"];
-    q0 -> q2 [label="eps" style=dashed];
-    q4 -> q6 [label="eps" style=dashed];
-}"""
-        },
-        "HORA": {
-            "DFA": """digraph AFD_HORA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1a [label="q1a"];
-    q1b [label="q1b"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q1a [label="[0-1]"];
-    q0 -> q1b [label="2"];
-    q1a -> q2 [label="[0-9]"];
-    q1b -> q2 [label="[0-3]"];
-    q2 -> q3 [label=":"];
-    q3 -> q4 [label="[0-5]"];
-    q4 -> q5 [label="[0-9]"];
-}""",
-            "NFA": """digraph AFN_HORA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1a [label="q1a"];
-    q1b [label="q1b"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q1a [label="[0-1]"];
-    q0 -> q1b [label="2"];
-    q1a -> q2 [label="[0-9]"];
-    q1b -> q2 [label="[0-3]"];
-    q1a -> q2 [label="eps" style=dashed];
-    q1b -> q2 [label="eps" style=dashed];
-    q2 -> q3 [label=":"];
-    q3 -> q4 [label="[0-5]"];
-    q4 -> q5 [label="[0-9]"];
-}"""
-        },
-        "NUMERO": {
-            "DFA": """digraph AFD_NUMERO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q1 [label="[0-9]"];
-    q1 -> q1 [label="[0-9]"];
-}""",
-            "NFA": """digraph AFN_NUMERO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q1 [label="[0-9]"];
-    q0 -> q2 [label="eps" style=dashed];
-    q1 -> q1 [label="[0-9]"];
-    q1 -> q2 [label="eps" style=dashed];
-}"""
-        },
-        "TIPO_SANGRE": {
-            "DFA": """digraph AFD_TIPO_SANGRE {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q1 [label="A|B|O|AB"];
-    q1 -> q2 [label="+|-"];
-}""",
-            "NFA": """digraph AFN_TIPO_SANGRE {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q1 [label="A|B|O|AB"];
-    q0 -> q1 [label="eps" style=dashed];
-    q1 -> q2 [label="+|-"];
-    q1 -> q2 [label="eps" style=dashed];
-}"""
-        },
-        "CADENA": {
-            "DFA": """digraph AFD_CADENA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q0 [label="[A-Za-z .,\\\\-]"];
-}""",
-            "NFA": """digraph AFN_CADENA {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q0 [label="[A-Za-z .,\\\\-]"];
-    q0 -> q0 [label="eps" style=dashed];
-}"""
-        },
-        "ID_CAMPO": {
-            "DFA": """digraph AFD_ID_CAMPO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightgreen style=filled];
-    q0 -> q0 [label="[A-Za-z/]"];
-}""",
-            "NFA": """digraph AFN_ID_CAMPO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightyellow style=filled];
-    q0 -> q0 [label="[A-Za-z/]"];
-    q0 -> q0 [label="eps" style=dashed];
-}"""
-        },
-        "SALON": {
-            "DFA": """digraph AFD_SALON {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5"];
-    q6 [label="q6" shape=doublecircle fillcolor=lightgreen];
-    q0 -> q1 [label="MI|CIR|PED|GO"];
-    q1 -> q2 [label="-"];
-    q2 -> q3 [label="P"];
-    q3 -> q4 [label="[0-9]"];
-    q4 -> q4 [label="[0-9]"];
-    q4 -> q5 [label="-"];
-    q5 -> q6 [label="[0-9]"];
-    q6 -> q6 [label="[0-9]"];
-}""",
-            "NFA": """digraph AFN_SALON {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0"];
-    q1 [label="q1"];
-    q2 [label="q2"];
-    q3 [label="q3"];
-    q4 [label="q4"];
-    q5 [label="q5"];
-    q6 [label="q6" shape=doublecircle fillcolor=lightyellow];
-    q0 -> q1 [label="MI|CIR|PED|GO"];
-    q1 -> q2 [label="-"];
-    q2 -> q3 [label="P"];
-    q3 -> q4 [label="[0-9]"];
-    q4 -> q4 [label="[0-9]"];
-    q4 -> q5 [label="-"];
-    q5 -> q6 [label="[0-9]"];
-    q6 -> q6 [label="[0-9]"];
-    q4 -> q5 [label="eps" style=dashed];
-}"""
-        },
-        "EXAMENES": {
-            "DFA": """digraph AFD_EXAMENES {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightgreen];
-    q0 -> q0 [label="[A-Za-z0-9 .,\\\\-]"];
-}""",
-            "NFA": """digraph AFN_EXAMENES {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightyellow];
-    q0 -> q0 [label="[A-Za-z0-9 .,\\\\-]"];
-    q0 -> q0 [label="eps" style=dashed];
-}"""
-        },
-        "LABORATORIO": {
-            "DFA": """digraph AFD_LABORATORIO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightgreen];
-    q0 -> q0 [label="[A-Za-z0-9 \\\\-_]"];
-}""",
-            "NFA": """digraph AFN_LABORATORIO {
-    rankdir=LR;
-    node [shape=circle fontname="Helvetica" style=filled fillcolor=white];
-    q0 [label="q0" shape=doublecircle fillcolor=lightyellow];
-    q0 -> q0 [label="[A-Za-z0-9 \\\\-_]"];
-    q0 -> q0 [label="eps" style=dashed];
-}"""
-        }
+# =========================
+# REGEX POR LEXEMA
+# =========================
+LEXEMAS_REGEX = {
+    "id_dni": r"^\d{8}$",
+    "id_edad": r"^\d{1,3}$",
+    "id_diagnostico": r"^[A-Z]\d{2}$",
+    "id_fecha": r"^\d{4}-\d{2}-\d{2}$",
+    "id_hora": r"^([01]\d|2[0-3]):[0-5]\d$",
+    "id_tipo_sangre": r"^(A|B|AB|O)[+-]$",
+    "id_nombre": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$",
+    "id_apellido": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$",
+    "id_hospital": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\-]+$",
+    "id_laboratorio": r"^[A-Za-z0-9\s\-]+$",
+    "id_salon": r"^(MI|CIR|PED|GO)-P\d{1,2}-\d{1,3}$",
+    "id_examenes": r"^.+$",
+    "id_personal": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.]+$"
+}
+
+
+# =========================
+# TABLA DE TOKENS GENERAL
+# =========================
+TOKENS_GENERALES = [
+    {"token": "id_nombre",      "descripcion": "Nombre del paciente",          "ejemplo": "Juan",          "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
+    {"token": "id_apellido",    "descripcion": "Apellido del paciente",         "ejemplo": "Perez",         "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
+    {"token": "id_dni",         "descripcion": "Documento de identidad (8 dígitos)", "ejemplo": "12345678", "regex": r"^\d{8}$"},
+    {"token": "id_edad",        "descripcion": "Edad del paciente (1-3 dígitos)", "ejemplo": "30",          "regex": r"^\d{1,3}$"},
+    {"token": "id_diagnostico", "descripcion": "Código CIE-10",                 "ejemplo": "J00",           "regex": r"^[A-Z]\d{2}$"},
+    {"token": "id_fecha",       "descripcion": "Fecha en formato YYYY-MM-DD",   "ejemplo": "2025-06-10",    "regex": r"^\d{4}-\d{2}-\d{2}$"},
+    {"token": "id_hora",        "descripcion": "Hora en formato HH:MM",         "ejemplo": "09:15",         "regex": r"^([01]\d|2[0-3]):[0-5]\d$"},
+    {"token": "id_hospital",    "descripcion": "Nombre de hospital o clínica",  "ejemplo": "Clinica Central","regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\-]+$"},
+    {"token": "id_laboratorio", "descripcion": "Nombre del laboratorio",        "ejemplo": "Lab Uno",       "regex": r"^[A-Za-z0-9\s\-]+$"},
+    {"token": "id_salon",       "descripcion": "Código de sala (AREA-PX-NUM)",  "ejemplo": "MI-P2-103",     "regex": r"^(MI|CIR|PED|GO)-P\d{1,2}-\d{1,3}$"},
+    {"token": "id_examenes",    "descripcion": "Nombre del examen médico",      "ejemplo": "Hemograma",     "regex": r"^.+$"},
+    {"token": "id_personal",    "descripcion": "Nombre del médico o enfermera", "ejemplo": "Dra Lopez",     "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.]+$"},
+    {"token": "id_tipo_sangre", "descripcion": "Tipo de sangre ABO/Rh",        "ejemplo": "A+",            "regex": r"^(A|B|AB|O)[+-]$"},
+]
+
+
+# =========================
+# MAPEO DE CAMPOS
+# =========================
+def normalizar_campo(campo):
+    campo = campo.lower().strip()
+    campo = normalize('NFKD', campo)
+    campo = ''.join(ch for ch in campo if not combining(ch))
+    campo = campo.replace(' ', '_').replace('/', '_').replace('-', '_')
+    return campo
+
+
+def tipo_id_campo(campo):
+    campo = normalizar_campo(campo)
+
+    mapa = {
+        "dni": "id_dni",
+        "edad": "id_edad",
+        "nombre": "id_nombre",
+        "apellido": "id_apellido",
+        "diagnostico": "id_diagnostico",
+        "fecha": "id_fecha",
+        "hora": "id_hora",
+        "hospital_clinica": "id_hospital",
+        "hospital_clinica": "id_hospital",
+        "laboratorio": "id_laboratorio",
+        "salon": "id_salon",
+        "examenes": "id_examenes",
+        "enfermera_medico": "id_personal",
+        "tipo_sangre": "id_tipo_sangre",
+        "tipo_de_sangre": "id_tipo_sangre"
     }
-    if tipo_token not in afds:
-        return ""
-    return afds[tipo_token].get(version, "")
 
-# ---------- SIMULACION DE AFD PARA OBTENER ESTADOS ----------
-def simular_afd(tipo_token, cadena):
-    if tipo_token in ["CODIGO_MEDICO", "FECHA", "HORA", "NUMERO", "TIPO_SANGRE",
-                      "CADENA", "ID_CAMPO", "SALON", "EXAMENES", "LABORATORIO"]:
-        estados = ["q0"]
-        for i in range(len(cadena)):
-            estados.append(f"q{i+1}")
-        estados.append("qf (aceptacion)")
-        return estados
-    else:
-        return ["q0", "q_error (rechazo)"]
+    return mapa.get(campo, "id_campo")
 
-# ---------- TOKENIZACION CON DOT ----------
+
+# =========================
+# TOKENIZADOR (MEJORADO)
+# =========================
+def validar_semantica(tipo_token, valor):
+    valor = valor.strip()
+
+    if tipo_token == "id_edad":
+        if not valor.isdigit():
+            return False, "Edad debe ser un número entero"
+        edad = int(valor)
+        if 0 <= edad <= 120:
+            return True, None
+        return False, "Edad debe estar entre 0 y 120"
+
+    if tipo_token == "id_diagnostico":
+        if valor in DICCIONARIO_ENFERMEDADES:
+            return True, None
+        return False, f"Diagnóstico '{valor}' no pertenece a la lista de CIE-10 conocida"
+
+    if tipo_token == "id_tipo_sangre":
+        if valor in TIPOS_SANGRE_VALIDOS:
+            return True, None
+        return False, f"Tipo de sangre '{valor}' no es válido"
+
+    if tipo_token == "id_fecha":
+        try:
+            datetime.strptime(valor, "%Y-%m-%d")
+            return True, None
+        except ValueError:
+            return False, "Fecha debe tener formato YYYY-MM-DD"
+
+    if tipo_token == "id_hora":
+        try:
+            datetime.strptime(valor, "%H:%M")
+            return True, None
+        except ValueError:
+            return False, "Hora debe tener formato HH:MM"
+
+    if tipo_token == "id_salon":
+        if valor in SALAS_VALIDAS:
+            return True, None
+        return False, f"Sala '{valor}' no es válida"
+
+    return True, None
+
+
 def tokenizar_valor(campo, valor):
-    tokens = []
-    tokens.append({
-        "tipo": "ID_CAMPO",
-        "valor": campo,
-        "estados": ["q0", "qf (aceptacion)"],
-        "dot_dfa": generar_dot_afd("ID_CAMPO", "DFA"),
-        "dot_nfa": generar_dot_afd("ID_CAMPO", "NFA")
-    })
-    tokens.append({
-        "tipo": "DOS_PUNTOS",
-        "valor": ":",
-        "estados": [],
-        "dot_dfa": "",
-        "dot_nfa": ""
-    })
-    tipo_token = "CADENA"
-    if campo.lower() in ["diagnostico", "diagnostico", "codigo", "codigo"]:
-        tipo_token = "CODIGO_MEDICO"
-    elif campo.lower() in ["fecha", "date"]:
-        tipo_token = "FECHA"
-    elif campo.lower() in ["hora", "time"]:
-        tipo_token = "HORA"
-    elif campo.lower() in ["dni", "cedula", "edad"]:
-        tipo_token = "NUMERO"
-    elif campo.lower() in ["tipo_sangre"]:
-        tipo_token = "TIPO_SANGRE"
-    elif campo.lower() in ["salon"]:
-        tipo_token = "SALON"
-    elif campo.lower() in ["examenes"]:
-        tipo_token = "EXAMENES"
-    elif campo.lower() in ["laboratorio"]:
-        tipo_token = "LABORATORIO"
-
-    valido = False
-    if tipo_token == "CODIGO_MEDICO":
-        valido = bool(re.fullmatch(r'^[A-Z]\d{2}$', valor.strip().upper()))
-    elif tipo_token == "FECHA":
-        valido = bool(re.fullmatch(r'^\d{4}-\d{2}-\d{2}$', valor.strip()))
-    elif tipo_token == "HORA":
-        valido = bool(re.fullmatch(r'^([01]\d|2[0-3]):[0-5]\d$', valor.strip()))
-    elif tipo_token == "NUMERO":
-        valido = bool(re.fullmatch(r'^\d+$', valor.strip()))
-    elif tipo_token == "TIPO_SANGRE":
-        valido = bool(re.fullmatch(r'^(A|B|AB|O)[+-]$', valor.strip().upper()))
-    elif tipo_token == "SALON":
-        valido = bool(re.fullmatch(r'^(MI|CIR|PED|GO)-P\d+-\d+$', valor.strip().upper()))
-    elif tipo_token in ["EXAMENES", "LABORATORIO"]:
-        # Acepta letras, números, espacios, comas, puntos, guiones
-        valido = bool(re.fullmatch(r'^[A-Za-záéíóúÁÉÍÓÚüÜñÑ0-9\s\.\,\-_]+$', valor.strip()))
+    tipo_token = tipo_id_campo(campo)
+    regex = LEXEMAS_REGEX.get(tipo_token, "")
+    valor_str = valor.strip()
+    # Valores vacíos deben considerarse inválidos para campos esperados
+    if valor_str == "":
+        lex_valido = False
+        sem_valido = False
+        sem_error = "Valor vacío"
+        valido = False
     else:
-        valido = bool(re.fullmatch(r'^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\,\-]+$', valor.strip()))
+        lex_valido = bool(re.fullmatch(regex, valor_str)) if regex else True
+        sem_valido, sem_error = validar_semantica(tipo_token, valor_str)
+        valido = lex_valido and sem_valido
+    graph_label = f"{tipo_token}\n{valor_str}"
 
-    if valido:
-        estados = simular_afd(tipo_token, valor.strip())
-        dot_dfa = generar_dot_afd(tipo_token, "DFA")
-        dot_nfa = generar_dot_afd(tipo_token, "NFA")
-    else:
-        tipo_esperado = tipo_token  # guarda qué se esperaba antes de pisar
-        tipo_token = "ERROR_LEXICO"
-        estados = ["q0", "q_error (rechazo)"]
-        dot_dfa, dot_nfa = generar_dot_error(tipo_esperado, valor.strip())
+    afn_dot = generar_dot_afn_token(graph_label, valido)
+    afd_dot = generar_dot_afd_token(graph_label, valido)
+    sintactico_dot = generar_dot_sintactico_token(tipo_token, valor_str)
 
-    tokens.append({
+    token_data = {
         "tipo": tipo_token,
-        "valor": valor.strip(),
-        "estados": estados,
-        "dot_dfa": dot_dfa,
-        "dot_nfa": dot_nfa
-    })
-    return tokens
-
-# ---------- GENERACION DE DOT DEL ARBOL SINTACTICO ----------
-def limpiar_dot_label(texto):
-    """Escapa caracteres problemáticos para labels DOT, preservando tildes."""
-    return (str(texto)
-            .replace('\\', '')
-            .replace('"', "'")
-            .replace('<', '')
-            .replace('>', '')
-            .replace('{', '')
-            .replace('}', '')
-            .replace('|', '-'))
-
-def generar_dot_arbol(datos):
-    dot = "digraph ArbolSintactico {\n"
-    dot += '    node [shape=box style=filled fillcolor=lightblue fontname="Helvetica"];\n'
-    dot += '    PACIENTE [label="PACIENTE" fillcolor=lightgreen];\n'
-    for i, (campo, valor) in enumerate(datos.items()):
-        campo_id = f"campo{i}"
-        valor_id = f"valor{i}"
-        campo_clean = limpiar_dot_label(campo)
-        valor_clean = limpiar_dot_label(valor)
-        tipo = "CADENA"
-        if campo.lower() in ["diagnostico"]:
-            tipo = "CODIGO_MEDICO"
-        elif campo.lower() in ["fecha"]:
-            tipo = "FECHA"
-        elif campo.lower() in ["hora"]:
-            tipo = "HORA"
-        elif campo.lower() in ["dni", "cedula", "edad"]:
-            tipo = "NUMERO"
-        elif campo.lower() in ["tipo_sangre"]:
-            tipo = "TIPO_SANGRE"
-        dot += f'    {campo_id} [label="CAMPO: {campo_clean}"];\n'
-        dot += f'    {valor_id} [label="{tipo}: {valor_clean}" fillcolor=lightyellow];\n'
-        dot += f"    PACIENTE -> {campo_id};\n"
-        dot += f"    {campo_id} -> {valor_id};\n"
-    dot += "}\n"
-    return dot
-
-# ---------- ANALISIS SINTACTICO ----------
-def analizar_sintaxis(datos):
-    campos_requeridos = [
-        'nombre', 'apellido', 'dni', 'edad', 'diagnostico',
-        'fecha', 'hora', 'hospital_clinica', 'laboratorio',
-        'salon', 'examenes', 'enfermera_medico', 'tipo_sangre'
-    ]
-    errores = []
-    for campo in campos_requeridos:
-        if campo not in datos or not datos[campo] or len(datos[campo].strip()) == 0:
-            errores.append(("SINTACTICO", f"Falta el campo '{campo}' en el archivo"))
-    return errores
-
-# ---------- ANALISIS SEMANTICO ----------
-def validar_semantica(datos, token_diagnostico):
-    errores = []
-    nombre = datos.get('nombre', '')
-    apellido = datos.get('apellido', '')
-    dni = datos.get('dni', '')
-    edad = datos.get('edad', '')
-    fecha = datos.get('fecha', '')
-    hora = datos.get('hora', '')
-    hospital = datos.get('hospital_clinica', '')
-    laboratorio = datos.get('laboratorio', '')
-    salon = datos.get('salon', '')
-    examenes = datos.get('examenes', '')
-    enfermera = datos.get('enfermera_medico', '')
-    tipo_sangre = datos.get('tipo_sangre', '').upper()
-    if tipo_sangre == '0+':
-        tipo_sangre = 'O+'
-
-    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]+$', nombre.strip()):
-        errores.append(("SEMANTICO", "El nombre solo debe contener letras"))
-    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]+$', apellido.strip()):
-        errores.append(("SEMANTICO", "El apellido solo debe contener letras"))
-    try:
-        edad_num = int(edad)
-        if edad_num < 0 or edad_num > 120:
-            errores.append(("SEMANTICO", "Edad fuera de rango (0-120)"))
-    except ValueError:
-        errores.append(("SEMANTICO", "La edad debe ser un numero entero"))
-    if len(dni.strip()) != 8 or not dni.isdigit():
-        errores.append(("SEMANTICO", "El DNI debe tener exactamente 8 digitos numericos"))
-    if token_diagnostico["tipo"] == "ERROR_LEXICO":
-        errores.append(("LEXICO", f"Codigo invalido: {token_diagnostico['valor']}"))
-    elif token_diagnostico["tipo"] == "CODIGO_MEDICO":
-        if token_diagnostico["valor"] not in DICCIONARIO_ENFERMEDADES:
-            errores.append(("SEMANTICO", f"Codigo {token_diagnostico['valor']} no existe en el diccionario"))
-    try:
-        datetime.strptime(fecha, "%Y-%m-%d")
-    except ValueError:
-        errores.append(("SEMANTICO", "Fecha invalida. Use YYYY-MM-DD"))
-    if not re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', hora):
-        errores.append(("SEMANTICO", "Hora invalida. Use HH:MM (24h)"))
-    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s\.\-]+$', hospital):
-        errores.append(("SEMANTICO", "Hospital/Clinica solo letras, espacios, puntos y guiones"))
-    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', laboratorio):
-        errores.append(("SEMANTICO", "Laboratorio solo letras, numeros, espacios, guiones"))
-    patron_salon = r'^(MI|CIR|PED|GO)-P(\d+)-(\d+)$'
-    match_salon = re.match(patron_salon, salon.strip().upper())
-    if not match_salon:
-        errores.append(("SEMANTICO", "Salon invalido. Ej: MI-P2-103"))
-    else:
-        piso = int(match_salon.group(2))
-        numero = int(match_salon.group(3))
-        if piso < 1 or piso > 10:
-            errores.append(("SEMANTICO", "Piso entre 1 y 10"))
-        if numero < 1 or numero > 999:
-            errores.append(("SEMANTICO", "Numero de salon entre 1 y 999"))
-    if len(examenes.strip()) == 0:
-        errores.append(("SEMANTICO", "Examenes no puede estar vacio"))
-    if not re.match(r'^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s\.]+$', enfermera):
-        errores.append(("SEMANTICO", "Enfermera/Medico solo letras, espacios y puntos"))
-    if tipo_sangre not in TIPOS_SANGRE_VALIDOS:
-        errores.append(("SEMANTICO", f"Tipo de sangre invalido. Validos: {', '.join(TIPOS_SANGRE_VALIDOS)}"))
-    return errores
-
-# ---------- PARSEAR ARCHIVO ----------
-def parsear_archivo_txt(contenido):
-    mapeo = {
-        'nombre': ['nombre', 'nombres'],
-        'apellido': ['apellido', 'apellidos'],
-        'dni': ['dni', 'cedula'],
-        'edad': ['edad'],
-        'diagnostico': ['diagnostico', 'diagnostico', 'codigo', 'codigo diagnostico'],
-        'fecha': ['fecha', 'date'],
-        'hora': ['hora', 'time'],
-        'hospital_clinica': ['hospital/clinica', 'hospital/clinica', 'hospital', 'clinica', 'hospital_clinica'],
-        'laboratorio': ['laboratorio', 'lab'],
-        'salon': ['salon', 'salon', 'sala', 'habitacion'],
-        'examenes': ['examenes', 'examenes', 'pruebas', 'estudios'],
-        'enfermera_medico': ['enfermera/medico', 'enfermera/medico', 'enfermera', 'medico', 'enfermera_medico'],
-        'tipo_sangre': ['tipo de sangre', 'tipo sangre', 'rh', 'sangre', 'tipo_sangre']
+        "campo": campo,
+        "valor": valor_str,
+        "regex": regex,
+        "estado": "OK" if valido else "ERROR",
+        "estados": ["q0", "qf"] if valido else ["q0", "q_error"],
+        "afn_dot": afn_dot,
+        "afd_dot": afd_dot,
+        "sintactico_dot": sintactico_dot,
+        "semantico_error": sem_error,
+        "lexico_valido": lex_valido,
+        "semantico_valido": sem_valido
     }
-    sinonimos = {}
-    for clave, lista in mapeo.items():
-        for sin in lista:
-            sinonimos[sin.lower()] = clave
 
+    if not lex_valido and regex:
+        token_data["error_mensaje"] = f"No cumple regex: {regex}"
+    elif not sem_valido:
+        token_data["error_mensaje"] = sem_error
+
+    return token_data
+
+
+# =========================
+# PARSER TXT
+# =========================
+def parsear_archivo_txt(contenido):
     datos = {}
-    lineas = contenido.splitlines()
     patron = re.compile(r'^\s*([^:]+?)\s*:\s*(.*)$')
-    for linea in lineas:
-        if linea.strip() == '':
+
+    for linea in contenido.splitlines():
+        if not linea.strip():
             continue
+
         m = patron.match(linea)
         if not m:
             raise ValueError(f"Linea invalida: {linea}")
-        campo_raw = m.group(1).strip().lower()
+
+        campo = m.group(1).strip().lower()
         valor = m.group(2).strip()
+        datos[campo] = valor
 
-        # Normalizar: quitar tildes y caracteres especiales para buscar sinonimo
-        campo_normalizado = normalize('NFKD', campo_raw).encode('ASCII', 'ignore').decode('ASCII')
-        campo_normalizado = campo_normalizado.strip()
-
-        clave = sinonimos.get(campo_raw) or sinonimos.get(campo_normalizado)
-        if not clave:
-            campo_sin_especiales = re.sub(r'[^\w\s/]', '', campo_normalizado)
-            clave = sinonimos.get(campo_sin_especiales.strip())
-
-        if clave:
-            datos[clave] = valor
-
-    required = {'nombre', 'apellido', 'dni', 'edad', 'diagnostico', 'fecha', 'hora',
-                'hospital_clinica', 'laboratorio', 'salon', 'examenes', 'enfermera_medico', 'tipo_sangre'}
-    faltantes = required - set(datos.keys())
-    if faltantes:
-        encontrados = list(datos.keys())
-        raise ValueError(f"Faltan los campos: {', '.join(faltantes)}. Detectados: {encontrados}")
     return datos
 
-# ---------- RUTA PRINCIPAL ----------
+
+def generar_dot_afn_token(label, valido=True):
+    label = label.replace('"', '\\"')
+    if valido:
+        return "\n".join([
+            "digraph G {",
+            "  rankdir=LR;",
+            "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+            "  q0 [label=\"q0\"];",
+            "  q1 [label=\"q1\"];",
+            "  qf [label=\"qf\", shape=doublecircle, fillcolor=\"#dfe6ff\"];",
+            "  edge [fontname=\"Courier\"];",
+            f"  q0 -> q1 [label=\"{label}\"];",
+            "  q0 -> qf [label=\"ε\"];",
+            "  q1 -> qf [label=\"ε\"];",
+            "}"
+        ])
+
+    return "\n".join([
+        "digraph G {",
+        "  rankdir=LR;",
+        "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+        "  q0 [label=\"q0\"];",
+        "  q_error [label=\"q_error\", shape=doublecircle, style=filled, fillcolor=\"#fdecea\", color=\"#c0392b\"];",
+        "  qf [label=\"qf\", shape=doublecircle, fillcolor=\"#dfe6ff\"];",
+        "  edge [fontname=\"Courier\"];",
+        f"  q0 -> q_error [label=\"{label}\"];",
+        "}"
+    ])
+
+
+def generar_dot_afd_token(label, valido=True):
+    label = label.replace('"', '\\"')
+    if valido:
+        return "\n".join([
+            "digraph G {",
+            "  rankdir=LR;",
+            "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+            "  q0 [label=\"q0\"];",
+            "  q1 [label=\"q1\"];",
+            "  qf [label=\"qf\", shape=doublecircle, fillcolor=\"#dfe6ff\"];",
+            "  edge [fontname=\"Courier\"];",
+            f"  q0 -> q1 [label=\"{label}\"];",
+            "  q1 -> qf [label=\"ε\"];",
+            "}"
+        ])
+
+    return "\n".join([
+        "digraph G {",
+        "  rankdir=LR;",
+        "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+        "  q0 [label=\"q0\"];",
+        "  q_error [label=\"q_error\", shape=doublecircle, style=filled, fillcolor=\"#fdecea\", color=\"#c0392b\"];",
+        "  edge [fontname=\"Courier\"];",
+        f"  q0 -> q_error [label=\"{label}\"];",
+        "}"
+    ])
+
+
+def generar_dot_sintactico_token(tipo_token, valor):
+    tipo_label = tipo_token.replace('_', ' ').upper()
+    valor_label = valor.replace('"', '\\"')
+    return "\n".join([
+        "digraph G {",
+        "  rankdir=TB;",
+        "  node [shape=box, style=filled, fillcolor=\"#ffffff\", fontname=\"Arial\"];",
+        "  root [label=\"SENTENCIA\"];",
+        f"  token [label=\"{tipo_label}\"];",
+        f"  valor [label=\"{valor_label}\"];",
+        "  root -> token;",
+        "  root -> valor;",
+        "}"
+    ])
+
+
+def generar_dot_sintactico_general(tokens_por_campo):
+    lineas = [
+        "digraph G {",
+        "  rankdir=TB;",
+        "  node [shape=box, style=filled, fillcolor=\"#ffffff\", fontname=\"Arial\"];",
+        "  root [label=\"SINTAXIS GENERAL\"];"
+    ]
+    for index, (campo, token) in enumerate(tokens_por_campo.items(), start=1):
+        token_label = token["tipo"].replace('_', ' ').upper()
+        valor = token["valor"].replace('"', '\\"')
+        lineas.append(f"  n{index} [label=\"{token_label}: {valor}\"];" )
+        lineas.append(f"  root -> n{index};")
+    lineas.append("}")
+    return "\n".join(lineas)
+
+
+def generar_dot_semantico_general(tokens_por_campo):
+    lineas = [
+        "digraph G {",
+        "  rankdir=TB;",
+        "  node [shape=box, style=filled, fillcolor=\"#ffffff\", fontname=\"Arial\"];",
+        "  root [label=\"SEMANTICA GENERAL\"];"
+    ]
+    for index, (campo, token) in enumerate(tokens_por_campo.items(), start=1):
+        estado = token.get("estado", "OK")
+        token_label = token["tipo"].replace('_', ' ').upper()
+        lineas.append(f"  n{index} [label=\"{token_label}: {estado}\"];" )
+        lineas.append(f"  root -> n{index};")
+    lineas.append("}")
+    return "\n".join(lineas)
+
+
+def generar_dot_afd_nfa(tokens_por_campo):
+    lineas = [
+        "digraph G {",
+        "  rankdir=LR;",
+        "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+        "  q0 [label=\"q0\"];",
+        "  qf [label=\"qf\", shape=doublecircle, fillcolor=\"#dfe6ff\"];",
+        "  edge [fontname=\"Courier\"];"
+    ]
+
+    for index, (campo, token) in enumerate(tokens_por_campo.items(), start=1):
+        token_label = token["tipo"]
+        valor = token["valor"].replace('"', '\\"')
+        label = f"{token_label}\\n{valor}"
+        lineas.append(f"  q0 -> q{index} [label=\"{label}\"];" )
+        lineas.append(f"  q{index} -> qf [label=\"ε\"];" )
+
+    lineas.append("}")
+    return "\n".join(lineas)
+
+
+def generar_dot_afd(tokens_por_campo):
+    lineas = [
+        "digraph G {",
+        "  rankdir=LR;",
+        "  node [shape=circle, style=filled, fillcolor=\"#f8f9fa\", fontname=\"Arial\"];",
+        "  q0 [label=\"q0\"];",
+        "  qf [label=\"qf\", shape=doublecircle, fillcolor=\"#dfe6ff\"];",
+        "  edge [fontname=\"Courier\"];"
+    ]
+
+    acumulado = []
+    for index, (campo, token) in enumerate(tokens_por_campo.items(), start=1):
+        token_label = token["tipo"]
+        valor = token["valor"].replace('"', '\\"')
+        label = f"{token_label}\\n{valor}"
+        lineas.append(f"  q{index-1} -> q{index} [label=\"{label}\"];")
+        acumulado.append(label)
+
+    lineas.append("}")
+    return "\n".join(lineas)
+
+# =========================
+# RUTA PRINCIPAL
+# =========================
 @app.route("/", methods=["GET", "POST"])
 def home():
+
     resultado = None
     mensaje_error_general = None
     tokens_por_campo = None
-    arbol_dot = None
+    tokens_usados = None
+    arbol_sintactico_general = None
+    arbol_semantico_general = None
+
+    catalogo = {
+        "diagnosticos": DICCIONARIO_ENFERMEDADES,
+        "sangre": TIPOS_SANGRE_VALIDOS,
+        "salas": [
+            "MI-P1-101",
+            "CIR-P2-210",
+            "PED-P3-305",
+            "GO-P1-103"
+        ]
+    }
 
     if request.method == "POST":
-        if 'archivo' not in request.files:
-            mensaje_error_general = "No se selecciono ningun archivo"
-        else:
-            archivo = request.files['archivo']
-            if archivo.filename == '':
-                mensaje_error_general = "Nombre de archivo vacio"
-            elif not allowed_file(archivo.filename):
-                mensaje_error_general = "Formato no permitido. Use archivos .txt"
+        archivo = request.files.get("archivo")
+
+        try:
+            if archivo and archivo.filename:
+                contenido = archivo.read().decode("utf-8")
+                datos = parsear_archivo_txt(contenido)
+                tokens_por_campo = {}
+                tokens_usados = []
+
+                validacion_lines = []
+                valido_completo = True
+                validacion_campos = []
+
+                for campo, valor in datos.items():
+                    token_data = tokenizar_valor(campo, valor)
+                    tokens_por_campo[campo] = token_data
+                    tokens_usados.append(token_data)
+
+                    if token_data.get("estado") == "ERROR":
+                        valido_completo = False
+                        if token_data.get("error_mensaje"):
+                            validacion_lines.append(
+                                f"Campo '{campo}' con valor '{valor}': {token_data.get('error_mensaje')}"
+                            )
+                        else:
+                            validacion_lines.append(
+                                f"Campo '{campo}' con valor '{valor}' no es válido"
+                            )
+
+                    validacion_campos.append({
+                        "campo": campo,
+                        "valor": valor,
+                        "valido": token_data.get("estado") == "OK",
+                        "estado": token_data.get("estado"),
+                        "label": campo.replace('_', ' ').title(),
+                        "error_mensaje": token_data.get("error_mensaje")
+                    })
+
+                if valido_completo and datos:
+                    validacion_resumen = {
+                        "valido": True,
+                        "mensaje": "El archivo .txt es válido y todos los campos se reconocen correctamente.",
+                        "detalles": [],
+                        "campos": validacion_campos
+                    }
+                else:
+                    validacion_resumen = {
+                        "valido": False,
+                        "mensaje": "El archivo .txt contiene uno o varios valores inválidos.",
+                        "detalles": validacion_lines or ["No se encontraron datos válidos."],
+                        "campos": validacion_campos
+                    }
+
+                arbol_sintactico_general = generar_dot_sintactico_general(tokens_por_campo)
+                arbol_semantico_general = generar_dot_semantico_general(tokens_por_campo)
+                resultado = {"exito": True, "datos": datos, "modo": "archivo"}
             else:
-                try:
-                    contenido = archivo.read().decode('utf-8')
-                    datos = parsear_archivo_txt(contenido)
+                mensaje_error_general = "Debes cargar un archivo .txt para procesar los datos."
 
-                    tokens_por_campo = {}
-                    for campo, valor in datos.items():
-                        tokens_por_campo[campo] = tokenizar_valor(campo, valor)
+        except Exception as e:
+            mensaje_error_general = str(e)
 
-                    arbol_dot = generar_dot_arbol(datos)
+    mostrar_tabla_general = tokens_por_campo is None
 
-                    token_diag = tokens_por_campo["diagnostico"][-1]
-                    errores_sintaxis = analizar_sintaxis(datos)
-                    errores_semantica = validar_semantica(datos, token_diag)
-
-                    errores_por_fase = {"LEXICO": [], "SINTACTICO": [], "SEMANTICO": []}
-
-                    # Recolectar errores lexicos desde los tokens
-                    for campo, lista_tokens in tokens_por_campo.items():
-                        for tk in lista_tokens:
-                            if tk["tipo"] == "ERROR_LEXICO":
-                                errores_por_fase["LEXICO"].append(
-                                    f"Campo '{campo}': valor '{tk["valor"]}' contiene caracteres invalidos"
-                                )
-
-                    for fase, msg in errores_sintaxis:
-                        errores_por_fase[fase].append(msg)
-                    for fase, msg in errores_semantica:
-                        errores_por_fase[fase].append(msg)
-
-                    total_errores = sum(len(errores_por_fase[f]) for f in errores_por_fase)
-
-                    if total_errores == 0:
-                        codigo = token_diag["valor"]
-                        enfermedad = DICCIONARIO_ENFERMEDADES.get(codigo, "Desconocida")
-                        resultado = {
-                            "exito": True,
-                            "nombre": datos['nombre'],
-                            "apellido": datos['apellido'],
-                            "dni": datos['dni'],
-                            "edad": datos['edad'],
-                            "diagnostico_nombre": enfermedad,
-                            "codigo": codigo,
-                            "token": token_diag,
-                            "fecha": datos['fecha'],
-                            "hora": datos['hora'],
-                            "hospital_clinica": datos['hospital_clinica'],
-                            "laboratorio": datos['laboratorio'],
-                            "salon": datos['salon'].upper(),
-                            "examenes": datos['examenes'],
-                            "enfermera_medico": datos['enfermera_medico'],
-                            "tipo_sangre": datos['tipo_sangre'].upper()
-                        }
-                    else:
-                        resultado = {"exito": False, "errores": errores_por_fase}
-                except Exception as e:
-                    mensaje_error_general = f"Error al procesar el archivo: {str(e)}"
-
-    return render_template("index.html",
-                           resultado=resultado,
-                           mensaje_error_general=mensaje_error_general,
-                           tokens_por_campo=tokens_por_campo,
-                           arbol_dot=arbol_dot)
+    return render_template(
+        "index.html",
+        resultado=resultado,
+        mensaje_error_general=mensaje_error_general,
+        tokens_por_campo=tokens_por_campo,
+        tokens_usados=tokens_usados,
+        validacion_resumen=validacion_resumen if 'validacion_resumen' in locals() else None,
+        arbol_sintactico_general=arbol_sintactico_general,
+        arbol_semantico_general=arbol_semantico_general,
+        mostrar_tabla_general=mostrar_tabla_general,
+        catalogo=catalogo,
+        tokens_generales=TOKENS_GENERALES
+    )
 
 if __name__ == "__main__":
-    app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")
+    app.run(debug=True)
