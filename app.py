@@ -435,7 +435,7 @@ def home():
                                 f"Campo '{campo}' con valor '{valor}' no es válido"
                             )
 
-                    validacion_campos.append({
+                    campo_dict = {
                         "campo": campo,
                         "valor": valor,
                         "valido": token_data.get("estado") == "OK",
@@ -443,7 +443,13 @@ def home():
                         "label": campo.replace('_', ' ').title(),
                         "desconocido": token_data.get("tipo") == "id_campo",
                         "error_mensaje": token_data.get("error_mensaje")
-                    })
+                    }
+                    
+                    # Agregar traducción si es un diagnóstico válido
+                    if token_data.get("tipo") == "id_diagnostico" and valor in DICCIONARIO_ENFERMEDADES:
+                        campo_dict["valor_traducido"] = f"{valor} - {DICCIONARIO_ENFERMEDADES[valor]}"
+                    
+                    validacion_campos.append(campo_dict)
 
                 if valido_completo and datos:
                     validacion_resumen = {
