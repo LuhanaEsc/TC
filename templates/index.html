@@ -282,6 +282,16 @@
             font-weight: 700;
         }
 
+        .mensaje-error {
+            background: #fdecea;
+            color: #c0392b;
+            border: 1px solid #e6b8b3;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 16px 0 20px;
+            font-weight: 600;
+        }
+
     </style>
 </head>
 
@@ -308,6 +318,12 @@
 </form>
 
 <br>
+
+{% if mensaje_error_general %}
+<div class="mensaje-error" role="alert">
+    <strong>Error:</strong> {{ mensaje_error_general }}
+</div>
+{% endif %}
 
 <strong>Formato esperado:</strong>
 <pre class="ejemplo-pre">
