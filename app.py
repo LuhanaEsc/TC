@@ -252,7 +252,6 @@ def generar_dot_afn_token(label, valido=True):
         "}"
     ])
 
-
 def generar_dot_afd_token(label, valido=True):
     label = label.replace('"', '\\"')
     if valido:
@@ -280,7 +279,6 @@ def generar_dot_afd_token(label, valido=True):
         "}"
     ])
 
-
 def generar_dot_sintactico_token(tipo_token, valor):
     tipo_label = tipo_token.replace('_', ' ').upper()
     valor_label = valor.replace('"', '\\"')
@@ -295,7 +293,6 @@ def generar_dot_sintactico_token(tipo_token, valor):
         "  root -> valor;",
         "}"
     ])
-
 
 def generar_dot_sintactico_general(tokens_por_campo):
     lineas = [
