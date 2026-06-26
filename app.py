@@ -32,9 +32,9 @@ SALAS_VALIDAS = {
 
 
 # =========================
-# REGEX POR LEXEMA
+# EXPRESIONES REGULARES POR LEXEMA
 # =========================
-LEXEMAS_REGEX = {
+LEXEMAS_EXPRESIONES_REGULARES = {
     "id_dni": r"^\d{8}$",
     "id_edad": r"^\d{1,3}$",
     "id_diagnostico": r"^[A-Z]\d{2}$",
@@ -55,19 +55,19 @@ LEXEMAS_REGEX = {
 # TABLA DE TOKENS GENERAL
 # =========================
 TOKENS_GENERALES = [
-    {"token": "id_nombre",      "descripcion": "Nombre del paciente",          "ejemplo": "Juan",          "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
-    {"token": "id_apellido",    "descripcion": "Apellido del paciente",         "ejemplo": "Perez",         "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
-    {"token": "id_dni",         "descripcion": "Documento de identidad (8 dígitos)", "ejemplo": "12345678", "regex": r"^\d{8}$"},
-    {"token": "id_edad",        "descripcion": "Edad del paciente (1-3 dígitos)", "ejemplo": "30",          "regex": r"^\d{1,3}$"},
-    {"token": "id_diagnostico", "descripcion": "Código CIE-10",                 "ejemplo": "J00",           "regex": r"^[A-Z]\d{2}$"},
-    {"token": "id_fecha",       "descripcion": "Fecha en formato YYYY-MM-DD",   "ejemplo": "2025-06-10",    "regex": r"^\d{4}-\d{2}-\d{2}$"},
-    {"token": "id_hora",        "descripcion": "Hora en formato HH:MM",         "ejemplo": "09:15",         "regex": r"^([01]\d|2[0-3]):[0-5]\d$"},
-    {"token": "id_hospital",    "descripcion": "Nombre de hospital o clínica",  "ejemplo": "Clinica Central","regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\-]+$"},
-    {"token": "id_laboratorio", "descripcion": "Nombre del laboratorio",        "ejemplo": "Lab Uno",       "regex": r"^[A-Za-z0-9\s\-]+$"},
-    {"token": "id_salon",       "descripcion": "Código de sala (AREA-PX-NUM)",  "ejemplo": "MI-P2-103",     "regex": r"^(MI|CIR|PED|GO)-P\d{1,2}-\d{1,3}$"},
-    {"token": "id_examenes",    "descripcion": "Nombre del examen médico",      "ejemplo": "Hemograma",     "regex": r"^.+$"},
-    {"token": "id_personal",    "descripcion": "Nombre del médico o enfermera", "ejemplo": "Dra Lopez",     "regex": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.]+$"},
-    {"token": "id_tipo_sangre", "descripcion": "Tipo de sangre ABO/Rh",        "ejemplo": "A+",            "regex": r"^(A|B|AB|O)[+-]$"},
+    {"token": "id_nombre",      "descripcion": "Nombre del paciente",          "ejemplo": "Juan",          "expresion_regular": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
+    {"token": "id_apellido",    "descripcion": "Apellido del paciente",         "ejemplo": "Perez",         "expresion_regular": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s]+$"},
+    {"token": "id_dni",         "descripcion": "Documento de identidad (8 dígitos)", "ejemplo": "12345678", "expresion_regular": r"^\d{8}$"},
+    {"token": "id_edad",        "descripcion": "Edad del paciente (1-3 dígitos)", "ejemplo": "30",          "expresion_regular": r"^\d{1,3}$"},
+    {"token": "id_diagnostico", "descripcion": "Código CIE-10",                 "ejemplo": "J00",           "expresion_regular": r"^[A-Z]\d{2}$"},
+    {"token": "id_fecha",       "descripcion": "Fecha en formato YYYY-MM-DD",   "ejemplo": "2025-06-10",    "expresion_regular": r"^\d{4}-\d{2}-\d{2}$"},
+    {"token": "id_hora",        "descripcion": "Hora en formato HH:MM",         "ejemplo": "09:15",         "expresion_regular": r"^([01]\d|2[0-3]):[0-5]\d$"},
+    {"token": "id_hospital",    "descripcion": "Nombre de hospital o clínica",  "ejemplo": "Clinica Central","expresion_regular": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.\-]+$"},
+    {"token": "id_laboratorio", "descripcion": "Nombre del laboratorio",        "ejemplo": "Lab Uno",       "expresion_regular": r"^[A-Za-z0-9\s\-]+$"},
+    {"token": "id_salon",       "descripcion": "Código de sala (AREA-PX-NUM)",  "ejemplo": "MI-P2-103",     "expresion_regular": r"^(MI|CIR|PED|GO)-P\d{1,2}-\d{1,3}$"},
+    {"token": "id_examenes",    "descripcion": "Nombre del examen médico",      "ejemplo": "Hemograma",     "expresion_regular": r"^.+$"},
+    {"token": "id_personal",    "descripcion": "Nombre del médico o enfermera", "ejemplo": "Dra Lopez",     "expresion_regular": r"^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s\.]+$"},
+    {"token": "id_tipo_sangre", "descripcion": "Tipo de sangre ABO/Rh",        "ejemplo": "A+",            "expresion_regular": r"^(A|B|AB|O)[+-]$"},
 ]
 
 
@@ -154,7 +154,7 @@ def validar_semantica(tipo_token, valor):
 
 def tokenizar_valor(campo, valor):
     tipo_token = tipo_id_campo(campo)
-    regex = LEXEMAS_REGEX.get(tipo_token, "")
+    expresion_regular = LEXEMAS_EXPRESIONES_REGULARES.get(tipo_token, "")
     valor_str = valor.strip()
     # Campos desconocidos deben marcarse como error
     if tipo_token == "id_campo":
@@ -169,7 +169,7 @@ def tokenizar_valor(campo, valor):
         sem_error = "Valor vacío"
         valido = False
     else:
-        lex_valido = bool(re.fullmatch(regex, valor_str)) if regex else True
+        lex_valido = bool(re.fullmatch(expresion_regular, valor_str)) if expresion_regular else True
         sem_valido, sem_error = validar_semantica(tipo_token, valor_str)
         valido = lex_valido and sem_valido
     graph_label = f"{tipo_token}\n{valor_str}"
@@ -182,7 +182,7 @@ def tokenizar_valor(campo, valor):
         "tipo": tipo_token,
         "campo": campo,
         "valor": valor_str,
-        "regex": regex,
+        "expresion_regular": expresion_regular,
         "estado": "OK" if valido else "ERROR",
         "estados": ["q0", "qf"] if valido else ["q0", "q_error"],
         "afn_dot": afn_dot,
